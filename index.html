@@ -26,7 +26,7 @@
             position: fixed;
             top: 15px;
             left: 15px;
-            padding: 12px 20px;
+            padding: 10px 20px;
             background: rgba(0, 0, 0, 0.85);
             color: #fff;
             font-size: 14px;
@@ -61,7 +61,7 @@
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Activating Auto-Lock Bootloader...</div>
+    <div id="hud">⏳ Checking Hardware Connection...</div>
     <button id="click-trigger">🔴 Record</button>
 
     <script>
@@ -74,37 +74,17 @@
         let isRecording = false;
         let stream = null;
 
-        // Force a brief delay to let ChromeOS register hardware labels completely
-        const delay = ms => new Promise(res => setTimeout(res, ms));
-
-        async function initCaptureSystem() {
+        async function verifyAndInitCapture() {
             try {
-                hud.innerText = "⏳ Opening baseline stream...";
-                
-                // Step 1: Open an initial camera stream to force the permanent browser handshake
-                const initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                videoEl.srcObject = initialStream;
-                
-                hud.innerText = "⏳ Scanning external USB buses...";
-                await delay(800); // Wait 800ms for Chrome to populate hardware strings completely
-
-                // Step 2: Grab the completely unlocked hardware array
+                // Step 1: Request permission to unlock the real hardware labels
+                const permStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
+                permStream.getTracks().forEach(track => track.stop()); // Instantly stop testing
+
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
 
-                // Kill the temporary baseline webcam stream instantly
-                initialStream.getTracks().forEach(track => track.stop());
-                videoEl.srcObject = null;
-
-                if (videoDevices.length === 0) {
-                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
-                    hud.style.color = '#ffaa00';
-                    return;
-                }
-
-                // Step 3: Run the blacklist filter over the authentic labels
-                let targetDeviceId = null;
-                const externalCard = videoDevices.find(device => {
+                // Step 2: Find external devices by dropping internal webcam identifiers
+                const externalDevices = videoDevices.filter(device => {
                     const label = device.label.toLowerCase();
                     return !label.includes('integrated') && 
                            !label.includes('internal') && 
@@ -112,39 +92,43 @@
                            !label.includes('webcam');
                 });
 
-                if (externalCard) {
-                    targetDeviceId = externalCard.deviceId;
-                    console.log(`Target identified: ${externalCard.label}`);
-                } else {
-                    // Fallback to the remaining option if no clear external name matches
-                    targetDeviceId = videoDevices[videoDevices.length - 1].deviceId;
+                // STOPS EXECUTING IF NO CAPTURE CARD IS PRESENT
+                if (externalDevices.length === 0) {
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                        videoEl.srcObject = null;
+                        stream = null;
+                    }
+                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
+                    hud.style.color = '#ffaa00';
+                    return;
                 }
 
-                hud.innerText = "⏳ Initializing 60fps link...";
+                // Step 3: If an external card exists, lock onto it and start the 60fps feed
+                if (!stream) {
+                    const targetDeviceId = externalDevices[0].deviceId;
+                    
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            deviceId: { exact: targetDeviceId },
+                            width: { ideal: 1920 }, 
+                            height: { ideal: 1080 }, 
+                            frameRate: { ideal: 60 } 
+                        },
+                        audio: { 
+                            echoCancellation: false, 
+                            noiseSuppression: false, 
+                            autoGainControl: false 
+                        }
+                    });
 
-                // Step 4: Fire up the real capture stream using the isolated device ID
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        deviceId: { exact: targetDeviceId },
-                        width: { ideal: 1920 }, 
-                        height: { ideal: 1080 }, 
-                        frameRate: { ideal: 60 } 
-                    },
-                    audio: { 
-                        echoCancellation: false, 
-                        noiseSuppression: false, 
-                        autoGainControl: false 
-                    }
-                });
-
-                videoEl.srcObject = stream;
-                
-                const finalName = externalCard ? externalCard.label : "USB Capture Device";
-                hud.innerText = `📺 Live Feed: ${finalName} | [SPACEBAR] to Record`;
-                hud.style.color = '#fff';
+                    videoEl.srcObject = stream;
+                    hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                    hud.style.color = '#fff';
+                }
 
             } catch (err) {
-                console.error("Bootloader crashed:", err);
+                console.error("Hardware filter check failed:", err);
                 hud.innerText = `❌ Connection Error: ${err.name}`;
                 hud.style.color = '#ff3333';
             }
@@ -210,11 +194,9 @@
             toggleRecording();
         });
 
-        navigator.mediaDevices.addEventListener('devicechange', () => {
-            if (!stream) initCaptureSystem();
-        });
-
-        window.addEventListener('DOMContentLoaded', initCaptureSystem);
+        // Live plug/unplug system tracking
+        navigator.mediaDevices.addEventListener('devicechange', verifyAndInitCapture);
+        window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
     </script>
 </body>
 </html>
