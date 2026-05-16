@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>60fps Local Web Capture</title>
+    <title>cbookcaptureX/title>
     <style>
         * {
             box-sizing: border-box;
@@ -320,7 +320,21 @@
 
                     hiddenVideo.srcObject = stream;
                     hiddenVideo.onloadedmetadata = () => {
-                        hiddenVideo.play();
+                       hiddenVideo.srcObject = stream;
+hiddenVideo.onloadedmetadata = () => {
+    hiddenVideo.muted = true; 
+    
+    hiddenVideo.play();
+    startCanvasRender();
+    
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(audioContext.destination);
+    } catch (audioErr) {
+        console.error("Audio monitoring setup failed:", audioErr);
+    }
+}; hiddenVideo.play();
                         startCanvasRender();
                         
                         try {
