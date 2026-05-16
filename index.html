@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>cbookcaptureX</title>
+    <title>60fps Local Web Capture</title>
     <style>
         * {
             box-sizing: border-box;
@@ -144,8 +144,7 @@
 </head>
 <body>
 
-    <video id="hidden-audio-bridge" autoplay playsinline style="position: absolute; width: 1px; height: 1px; opacity: 0.01; pointer-events: none;"></video>
-    <canvas id="v"></canvas>
+    <video id="v" autoplay playsinline></video>
     <div id="hud">⏳ Checking Hardware Connection...</div>
     
     <div id="controls-wrapper" style="display: none;">
@@ -171,7 +170,7 @@
     </div>
 
     <script>
-        const hiddenVideo = document.getElementById('hidden-audio-bridge');
+        const videoElement = document.getElementById('v');
         const hud = document.getElementById('hud');
         const controlsWrapper = document.getElementById('controls-wrapper');
         const resSelector = document.getElementById('res-selector');
@@ -184,6 +183,7 @@
         let recordedChunks = [];
         let isRecording = false;
         let stream = null;
+        let audioContext = null;
         
         let fadeTimeout;
         let tvBannerTimeout;
@@ -208,6 +208,11 @@
                 fadeTimeout = setTimeout(hideUI, 3000);
             }
         }
+
+        // Force Chrome to give maximum performance to the video player container
+        videoElement.addEventListener('play', () => {
+            videoElement.style.transform = 'translateZ(0)';
+        });
 
         function showUI() {
             if (!isRecording) hud.classList.remove('ui-hidden');
@@ -237,23 +242,6 @@
             const secs = (totalSeconds % 60).toString().padStart(2, '0');
             return `${hrs}:${mins}:${secs}`;
         }
-
-        function startCanvasRender() {
-            const canvas = document.getElementById('v');
-            const ctx = canvas.getContext('2d', { alpha: false, desynchronized: false }); 
-            
-            function render() {
-                if (hiddenVideo.readyState === hiddenVideo.HAVE_ENOUGH_DATA) {
-                    if (canvas.width !== hiddenVideo.videoWidth) {
-                        canvas.width = hiddenVideo.videoWidth;
-                        canvas.height = hiddenVideo.videoHeight;
-                    }
-                    ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
-                }
-                requestAnimationFrame(render);
-            }
-            requestAnimationFrame(render);
-        }
         
         async function verifyAndInitCapture() {
             const resSelector = document.getElementById('res-selector');
@@ -279,9 +267,7 @@
                     controlsWrapper.style.display = 'none';
                     hud.style.display = 'block';
                     
-                    const canvas = document.getElementById('v');
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    videoElement.srcObject = null;
                     
                     hud.innerText = "⚠️ No Capture Card Detected! Please Check USB Connection!";
                     hud.style.color = '#ffaa00';
@@ -318,20 +304,30 @@
                         audio: audioConstraint
                     });
 
-                    // Split-stream pipeline prevents duplicate audio engine processing
-                    const videoOnlyStream = new MediaStream(stream.getVideoTracks());
-                    hiddenVideo.srcObject = videoOnlyStream;
+                    // Give the video player the FULL stream so its sync clock is happy (Stops frame drops)
+                    videoElement.srcObject = stream;
                     
-                    hiddenVideo.onloadedmetadata = () => {
-                        hiddenVideo.play();
-                        startCanvasRender();
+                    videoElement.onloadedmetadata = () => {
+                        videoElement.play();
                         
                         try {
-                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                            const source = audioContext.createMediaStreamSource(stream);
-                            source.connect(audioContext.destination);
+                            if (!audioContext) {
+                                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            }
+                            
+                            // Route 1: Pull the hardware stream instantly to your speakers
+                            const hardwareSource = audioContext.createMediaStreamSource(stream);
+                            hardwareSource.connect(audioContext.destination);
+                            
+                            // Route 2: Catch the HTML video element's audio out and throw it away (Kills Echo)
+                            const elementSource = audioContext.createMediaElementSource(videoElement);
+                            const silenceGain = audioContext.createGain();
+                            silenceGain.gain.value = 0; 
+                            elementSource.connect(silenceGain);
+                            silenceGain.connect(audioContext.destination);
+
                         } catch (audioErr) {
-                            console.error("Audio monitoring setup failed:", audioErr);
+                            console.error("Audio pipeline configuration failed:", audioErr);
                         }
                     };
 
