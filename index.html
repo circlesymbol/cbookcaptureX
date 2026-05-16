@@ -61,7 +61,7 @@
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Initializing Capture Stream...</div>
+    <div id="hud">⏳ Auto-Filtering Webcam...</div>
     <button id="click-trigger">🔴 Record</button>
 
     <script>
@@ -78,9 +78,45 @@
             if (stream) return;
 
             try {
-                // Pull the browser's default camera device (which we just forced to be the capture card)
+                // Step 1: Request permission to instantly unlock hardware text labels
+                const initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                initStream.getTracks().forEach(track => track.stop()); // Instantly shut off the camera
+
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+                if (videoDevices.length === 0) {
+                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
+                    hud.style.color = '#ffaa00';
+                    return;
+                }
+
+                let targetDeviceId = null;
+
+                // Step 2: Run a strict name-blacklist scan across all connected items
+                const externalCard = videoDevices.find(device => {
+                    const label = device.label.toLowerCase();
+                    // Filters out any variation of a built-in camera name
+                    return !label.includes('integrated') && 
+                           !label.includes('internal') && 
+                           !label.includes('front') && 
+                           !label.includes('webcam') &&
+                           !label.includes('virtual');
+                });
+
+                // If an external device passes the blacklist filter, use its specific hardware ID
+                if (externalCard) {
+                    targetDeviceId = externalCard.deviceId;
+                    console.log(`Bypassed webcam. Locked onto capture device: ${externalCard.label}`);
+                } else {
+                    // Fallback to the first available camera if no external label matches
+                    targetDeviceId = videoDevices[0].deviceId;
+                }
+
+                // Step 3: Spin up the 60fps high-quality video/raw audio layout
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
+                        deviceId: { exact: targetDeviceId },
                         width: { ideal: 1920 }, 
                         height: { ideal: 1080 }, 
                         frameRate: { ideal: 60 } 
@@ -93,13 +129,16 @@
                 });
 
                 videoEl.srcObject = stream;
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                
+                // Print device active confirmation text directly to the HUD display
+                const finalLabel = externalCard ? externalCard.label : "USB Video";
+                hud.innerText = `📺 Live: ${finalLabel} | Press [SPACEBAR] to Record`;
                 hud.style.color = '#fff';
 
             } catch (err) {
                 console.error("Capture failure:", err);
-                hud.innerText = `⚠️ No Device Detected or Permission Denied.`;
-                hud.style.color = '#ffaa00';
+                hud.innerText = `❌ Hardware Setup Error: ${err.name}`;
+                hud.style.color = '#ff3333';
             }
         }
 
@@ -169,6 +208,10 @@
         clickTrigger.addEventListener('click', (e) => {
             e.blur(); 
             toggleRecording();
+        });
+
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+            if (!stream) initCapture();
         });
 
         window.addEventListener('DOMContentLoaded', initCapture);
