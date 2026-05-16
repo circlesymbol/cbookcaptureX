@@ -16,16 +16,12 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             user-select: none;
         }
-       #v {
+#v {
     width: 100vw;
     height: 100vh;
     object-fit: contain;
     display: block;
-    
-    /* PERFORMANCE FIX: Forces the Chromebook to isolate this video layer */
-    contain: strict;
-    will-change: transform;
-    transform: translateZ(0); /* Triggers full 3D hardware acceleration for rendering */
+    background: #000;
 }
         
         /* Controls Layout */
@@ -148,7 +144,7 @@
 </head>
 <body>
 
-    <video id="v" autoplay playsinline></video>
+    <canvas id="v"></canvas>
     <div id="hud">⏳ Checking Hardware Connection...</div>
     
     <div id="controls-wrapper" style="display: none;">
@@ -240,7 +236,30 @@
             const secs = (totalSeconds % 60).toString().padStart(2, '0');
             return `${hrs}:${mins}:${secs}`;
         }
+const hiddenVideo = document.createElement('video');
+hiddenVideo.autoplay = true;
+hiddenVideo.playsinline = true;
+hiddenVideo.muted = true;
 
+function startCanvasRender() {
+    const canvas = document.getElementById('v');
+    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }); 
+    // 'desynchronized: true' tells ChromeOS to bypass the front-buffer completely for zero lag
+    
+    function render() {
+        if (hiddenVideo.readyState === hiddenVideo.HAVE_ENOUGH_DATA) {
+            // Match canvas size to the raw capture card resolution dynamically
+            if (canvas.width !== hiddenVideo.videoWidth) {
+                canvas.width = hiddenVideo.videoWidth;
+                canvas.height = hiddenVideo.videoHeight;
+            }
+            // Draw the frame directly via hardware acceleration
+            ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+        }
+        requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+}
         async function verifyAndInitCapture() {
             try {
                 const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -291,8 +310,11 @@ stream = await navigator.mediaDevices.getUserMedia({
     },
     audio: audioConstraint
 });
-    videoEl.srcObject = stream;
-}
+   hiddenVideo.srcObject = stream;
+hiddenVideo.onloadedmetadata = () => {
+    hiddenVideo.play();
+    startCanvasRender(); // Fire up the ultra-lightweight GPU rendering lane
+};
 
                 controlsWrapper.style.display = 'flex';
                 if (!isRecording && !blockFadingForNotice) {
