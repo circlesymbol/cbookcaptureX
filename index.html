@@ -26,16 +26,18 @@
             position: fixed;
             top: 15px;
             left: 15px;
-            padding: 10px 20px;
-            background: rgba(0, 0, 0, 0.85);
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.9);
             color: #fff;
-            font-size: 14px;
-            font-weight: 500;
+            font-size: 13px;
+            font-family: monospace;
             border-radius: 6px;
-            pointer-events: none;
             z-index: 999999;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            max-width: 90vw;
+            max-height: 40vh;
+            overflow-y: auto;
         }
         #click-trigger {
             position: fixed;
@@ -51,171 +53,63 @@
             font-size: 14px;
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            transition: background 0.2s ease;
-        }
-        #click-trigger:hover {
-            background: #e60000;
         }
     </style>
 </head>
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Mapping Hardware Groups...</div>
+    <div id="hud">⏳ Running hardware diagnostics...</div>
     <button id="click-trigger">🔴 Record</button>
 
     <script>
         const videoEl = document.getElementById('v');
         const hud = document.getElementById('hud');
-        const clickTrigger = document.getElementById('click-trigger');
         
-        let mediaRecorder;
-        let recordedChunks = [];
-        let isRecording = false;
         let stream = null;
 
         async function initCapture() {
-            if (stream) return;
-
             try {
-                // Step 1: Fire up an initial stream to clear privacy restrictions
+                // Request temporary feed to clear security blocks on device names
                 const initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                initStream.getTracks().forEach(track => track.stop()); // Immediately release
+                initStream.getTracks().forEach(track => track.stop());
 
-                // Separate our audio inputs and video inputs
-                const audioDevices = devices.filter(d => d.kind === 'audioinput');
+                let diagnosticLog = "<b>--- HARDWARE DIAGNOSTIC LOG ---</b><br><br>";
+                
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-                if (videoDevices.length === 0) {
-                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
-                    hud.style.color = '#ffaa00';
-                    return;
-                }
-
-                let targetDeviceId = null;
-
-                // Step 2: Locate the external USB Audio device profile
-                const externalAudio = audioDevices.find(device => {
-                    const label = device.label.toLowerCase();
-                    return label.includes('usb') || label.includes('capture') || label.includes('digital');
+                // Print all found cameras
+                diagnosticLog += "🎥 <b>VIDEO DEVICES FOUND:</b><br>";
+                videoDevices.forEach((d, i) => {
+                    diagnosticLog += `[${i}] ${d.label || "Hidden Name"}<br>`;
+                    diagnosticLog += `&nbsp;&nbsp;&nbsp;ID: ${d.deviceId.substring(0, 8)}...<br>`;
+                    diagnosticLog += `&nbsp;&nbsp;&nbsp;Group: ${d.groupId.substring(0, 8)}...<br><br>`;
                 });
 
-                // Step 3: Match the Video device sharing that exact group signature
-                if (externalAudio && externalAudio.groupId) {
-                    const matchingVideo = videoDevices.find(video => video.groupId === externalAudio.groupId);
-                    if (matchingVideo) {
-                        targetDeviceId = matchingVideo.deviceId;
-                        console.log(`Hardware Group Match Successful: ${matchingVideo.label}`);
-                    }
-                }
+                // Print all found audio sources
+                diagnosticLog += "🎙️ <b>AUDIO DEVICES FOUND:</b><br>";
+                audioDevices.forEach((d, i) => {
+                    diagnosticLog += `[${i}] ${d.label || "Hidden Name"}<br>`;
+                    diagnosticLog += `&nbsp;&nbsp;&nbsp;Group: ${d.groupId.substring(0, 8)}...<br><br>`;
+                });
 
-                // Fallback to our name blacklist if the group matching signature isn't found
-                if (!targetDeviceId) {
-                    const externalCard = videoDevices.find(device => {
-                        const label = device.label.toLowerCase();
-                        return !label.includes('integrated') && !label.includes('internal') && !label.includes('front');
+                // Pick first video device to keep page active while troubleshooting
+                if (videoDevices.length > 0) {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { deviceId: { exact: videoDevices[0].deviceId } },
+                        audio: true
                     });
-                    targetDeviceId = externalCard ? externalCard.deviceId : videoDevices[0].deviceId;
+                    videoEl.srcObject = stream;
                 }
 
-                // Step 4: Stream initialization
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        deviceId: { exact: targetDeviceId },
-                        width: { ideal: 1920 }, 
-                        height: { ideal: 1080 }, 
-                        frameRate: { ideal: 60 } 
-                    },
-                    audio: { 
-                        echoCancellation: false, 
-                        noiseSuppression: false, 
-                        autoGainControl: false 
-                    }
-                });
-
-                videoEl.srcObject = stream;
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                hud.style.color = '#fff';
+                hud.innerHTML = diagnosticLog;
 
             } catch (err) {
-                console.error("Group initialization failed:", err);
-                hud.innerText = `❌ Hardware Setup Error: ${err.name}`;
-                hud.style.color = '#ff3333';
+                hud.innerText = `❌ Diagnostic failure: ${err.name}\nMake sure browser permissions are allowed!`;
             }
         }
-
-        function toggleRecording() {
-            if (!stream) return;
-
-            if (!isRecording) {
-                recordedChunks = [];
-                let options = { mimeType: 'video/webm;codecs=vp9' };
-                
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options = { mimeType: 'video/webm;codecs=vp8' };
-                }
-                
-                try {
-                    mediaRecorder = new MediaRecorder(stream, options);
-                } catch (e) {
-                    mediaRecorder = new MediaRecorder(stream);
-                }
-                
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data && event.data.size > 0) {
-                        recordedChunks.push(event.data);
-                    }
-                };
-
-                mediaRecorder.onstop = () => {
-                    hud.innerText = "⏳ Processing Video...";
-                    hud.style.color = '#ffff00';
-                    
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    const url = URL.createObjectURL(blob);
-                    
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `gameplay_1080p60_${Date.now()}.webm`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                        hud.style.color = '#fff';
-                    }, 150);
-                };
-
-                mediaRecorder.start(100);
-                isRecording = true;
-                hud.innerText = "⏺️ RECORDING LIVE (Press SPACEBAR to Stop)";
-                hud.style.color = '#ff3333';
-                clickTrigger.innerText = "⏹️ Stop";
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-                clickTrigger.innerText = "🔴 Record";
-            }
-        }
-
-        window.onkeydown = (e) => {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                toggleRecording();
-            }
-        };
-
-        clickTrigger.addEventListener('click', (e) => {
-            e.blur(); 
-            toggleRecording();
-        });
-
-        navigator.mediaDevices.addEventListener('devicechange', () => {
-            if (!stream) initCapture();
-        });
 
         window.addEventListener('DOMContentLoaded', initCapture);
     </script>
