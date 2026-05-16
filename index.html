@@ -304,8 +304,9 @@
                         audio: audioConstraint
                     });
 
-                    // Give the video player the FULL stream so its sync clock is happy (Stops frame drops)
+                    
                     videoElement.srcObject = stream;
+                    videoElement.muted = true;
                     
                     videoElement.onloadedmetadata = () => {
                         videoElement.play();
