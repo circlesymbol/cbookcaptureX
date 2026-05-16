@@ -22,8 +22,17 @@
             object-fit: contain;
             display: block;
         }
-        #hud {
+        
+        /* Added smooth transitions for fading elements */
+        #hud, #click-trigger {
             position: fixed;
+            z-index: 999999;
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #hud {
             top: 15px;
             left: 15px;
             padding: 10px 20px;
@@ -33,12 +42,11 @@
             font-weight: 500;
             border-radius: 6px;
             pointer-events: none;
-            z-index: 999999;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
+
         #click-trigger {
-            position: fixed;
             bottom: 15px;
             right: 15px;
             padding: 12px 20px;
@@ -47,14 +55,19 @@
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            z-index: 999999;
             font-size: 14px;
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            transition: background 0.2s ease;
         }
         #click-trigger:hover {
             background: #e60000;
+        }
+
+        /* Utility class to handle the clean fade state out of sight */
+        .ui-hidden {
+            opacity: 0 !important;
+            visibility: hidden !important;
+            cursor: none; /* Hides the mouse pointer entirely when UI fades */
         }
     </style>
 </head>
@@ -73,18 +86,40 @@
         let recordedChunks = [];
         let isRecording = false;
         let stream = null;
+        
+        let fadeTimeout;
+
+        // Fades UI out after inactivity
+        function resetFadeTimer() {
+            showUI();
+            clearTimeout(fadeTimeout);
+            
+            // Only auto-fade if everything is connected and working normally
+            if (stream) {
+                fadeTimeout = setTimeout(hideUI, 3000); // 3000ms = 3 seconds
+            }
+        }
+
+        function showUI() {
+            hud.classList.remove('ui-hidden');
+            clickTrigger.classList.remove('ui-hidden');
+            document.body.style.cursor = 'default';
+        }
+
+        function hideUI() {
+            hud.classList.add('ui-hidden');
+            clickTrigger.classList.add('ui-hidden');
+        }
 
         async function verifyAndInitCapture() {
             try {
-                // Step 1: Request audio permission to safely unlock system device labels
                 const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                permStream.getTracks().forEach(track => track.stop()); // Instantly release testing track
+                permStream.getTracks().forEach(track => track.stop());
 
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
                 const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-                // Step 2: Filter for external capture video hardware
                 const externalVideoDevices = videoDevices.filter(device => {
                     const label = device.label.toLowerCase();
                     return !label.includes('integrated') && 
@@ -93,7 +128,6 @@
                            !label.includes('webcam');
                 });
 
-                // UNPLUGGED / DISCONNECTED PROTECTION
                 if (externalVideoDevices.length === 0) {
                     if (stream) {
                         stream.getTracks().forEach(track => track.stop());
@@ -106,10 +140,10 @@
                     videoEl.srcObject = null;
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                     hud.style.color = '#ffaa00';
+                    showUI(); // Keep error visible
                     return;
                 }
 
-                // Step 3: Audio Exclusion Filter. Toss out any internal Chromebook mics.
                 const externalAudioDevices = audioDevices.filter(device => {
                     const label = device.label.toLowerCase();
                     return !label.includes('internal') && 
@@ -118,11 +152,9 @@
                            !label.includes('default');
                 });
 
-                // Step 4: Spin up the dual-channel stream using exact target device IDs
                 if (!stream) {
                     const targetVideoId = externalVideoDevices[0].deviceId;
                     
-                    // Assign audio based on our exclusion filter results
                     let audioConstraint;
                     if (externalAudioDevices.length > 0) {
                         audioConstraint = { 
@@ -132,7 +164,6 @@
                             autoGainControl: false 
                         };
                     } else if (audioDevices.length > 0) {
-                        // Fallback fallback: If everything was filtered out, pick the very last audio interface listed (usually the plug-in USB)
                         audioConstraint = { 
                             deviceId: { exact: audioDevices[audioDevices.length - 1].deviceId },
                             echoCancellation: false, 
@@ -160,6 +191,9 @@
                     videoEl.srcObject = stream;
                     hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
                     hud.style.color = '#fff';
+                    
+                    // Kick off our fade timer loop now that the feed is healthy
+                    resetFadeTimer();
                 }
 
             } catch (err) {
@@ -171,6 +205,7 @@
                 videoEl.srcObject = null;
                 hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                 hud.style.color = '#ffaa00';
+                showUI();
             }
         }
 
@@ -196,6 +231,8 @@
 
                 mediaRecorder.onstop = () => {
                     hud.innerText = "⏳ Processing Video...";
+                    showUI(); // Hold UI awake while building file download
+                    
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -210,6 +247,7 @@
                         if (stream) {
                             hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
                         }
+                        resetFadeTimer();
                     }, 150);
                 };
 
@@ -217,17 +255,25 @@
                 isRecording = true;
                 hud.innerText = "⏺️ RECORDING LIVE (Press SPACEBAR to Stop)";
                 clickTrigger.innerText = "⏹️ Stop";
+                resetFadeTimer(); // Briefly flash the updated recording status text
             } else {
                 mediaRecorder.stop();
                 isRecording = false;
                 clickTrigger.innerText = "🔴 Record";
+                resetFadeTimer();
             }
         }
+
+        // Global listeners to instantly reset fade timer on user interaction
+        window.addEventListener('mousemove', resetFadeTimer);
+        window.addEventListener('touchstart', resetFadeTimer);
 
         window.onkeydown = (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
                 toggleRecording();
+            } else {
+                resetFadeTimer(); // Any other key press brings back UI lines
             }
         };
 
