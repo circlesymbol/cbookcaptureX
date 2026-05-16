@@ -59,7 +59,7 @@
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             display: block; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; /* Monospace keeps numbers from shifting widths */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; /* Monospace stops shifting widths */
         }
         #click-trigger:hover {
             background: #e60000;
@@ -162,7 +162,7 @@
         }
 
         function showUI() {
-            // CRITICAL CHECK: Never redraw HUD panel elements if recording tasks are live
+            // Never bring back the HUD if we are currently recording
             if (!isRecording) {
                 hud.classList.remove('ui-hidden');
             }
@@ -191,12 +191,12 @@
             }, 4000);
         }
 
-        // Logic formatting seconds into clean 00:00:00 timestamp arrays
+        // Formats numerical seconds cleanly into 00:00:00
         function formatTimeString(totalSeconds) {
             const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
             const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
             const secs = (totalSeconds % 60).toString().padStart(2, '0');
-            return `[${hrs}:${mins}:${secs}]`;
+            return `${hrs}:${mins}:${secs}`;
         }
 
         async function verifyAndInitCapture() {
@@ -219,7 +219,7 @@
                 if (externalVideoDevices.length === 0) {
                     allowUIFading = false; 
                     clearTimeout(fadeTimeout);
-                    clearInterval(recordingInterval); // Safeguard kill clock loops
+                    clearInterval(recordingInterval); 
                     
                     if (stream) {
                         stream.getTracks().forEach(track => track.stop());
@@ -231,7 +231,7 @@
                     }
                     
                     clickTrigger.style.display = 'none'; 
-                    hud.style.display = 'block'; // Make sure HUD block container structure isn't collapsed
+                    hud.style.display = 'block'; 
                     
                     videoEl.srcObject = null;
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
@@ -361,7 +361,6 @@
                 };
 
                 mediaRecorder.onstop = () => {
-                    // Turn HUD display back on when recording completes
                     hud.style.display = 'block';
                     hud.innerText = "⏳ Processing Video...";
                     showUI();
@@ -387,22 +386,22 @@
                 mediaRecorder.start(100);
                 isRecording = true;
                 
-                // STEP 1: Fully drop the diagnostic overlay box completely out of view
+                // 1. Instantly hide HUD bar layout completely
                 hud.classList.add('ui-hidden');
                 setTimeout(() => { hud.style.display = 'none'; }, 400); 
 
-                // STEP 2: Initialize active timer tracker
+                // FIXED: Establish the button innerText immediately at exactly 0 seconds
                 recordingSeconds = 0;
-                clickTrigger.innerText = `⏹️ Stop 00:00:00`;
+                clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
                 
+                // 2. Fire clock generation cycle running every 1000ms
                 recordingInterval = setInterval(() => {
                     recordingSeconds++;
-                    clickTrigger.innerText = `⏹️ Stop ${formatTimeString(recordingSeconds)}`;
+                    clickTrigger.innerText = `⏹️ Stop [${formatTimeString(recordingSeconds)}]`;
                 }, 1000);
 
                 resetFadeTimer();
             } else {
-                // Stop Recording Operations
                 clearInterval(recordingInterval);
                 mediaRecorder.stop();
                 isRecording = false;
