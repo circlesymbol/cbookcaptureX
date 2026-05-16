@@ -144,7 +144,8 @@
 </head>
 <body>
 
-    <canvas id="v"></canvas>
+    <video id="hidden-audio-bridge" autoplay playsinline style="position: absolute; width: 1px; height: 1px; opacity: 0.01; pointer-events: none;"></video>
+<canvas id="v"></canvas>
     <div id="hud">⏳ Checking Hardware Connection...</div>
     
     <div id="controls-wrapper" style="display: none;">
@@ -170,6 +171,7 @@
     </div>
 
     <script>
+        const hiddenVideo = document.getElementById('hidden-audio-bridge');
         const videoEl = document.getElementById('v');
         const hud = document.getElementById('hud');
         const controlsWrapper = document.getElementById('controls-wrapper');
@@ -236,7 +238,6 @@
             const secs = (totalSeconds % 60).toString().padStart(2, '0');
             return `${hrs}:${mins}:${secs}`;
         }
-const hiddenVideo = document.createElement('video');
 hiddenVideo.autoplay = true;
 hiddenVideo.playsinline = true;
 hiddenVideo.muted = true;
