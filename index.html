@@ -143,7 +143,6 @@
         let lastY = 0;
         const movementThreshold = 10;
         
-        // Flag to tracking connection states cleanly
         let wasDisconnected = true;
 
         function resetFadeTimer() {
@@ -197,6 +196,9 @@
                 });
 
                 if (externalVideoDevices.length === 0) {
+                    // CRITICAL FIX: Instantly kill the fade timer loop so it can't hide our error text
+                    clearTimeout(fadeTimeout);
+                    
                     if (stream) {
                         stream.getTracks().forEach(track => track.stop());
                         stream = null;
@@ -209,8 +211,8 @@
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                     hud.style.color = '#ffaa00';
                     tvBanner.classList.remove('banner-active'); 
-                    wasDisconnected = true; // Arm the flag for when it gets reconnected
-                    showUI();
+                    wasDisconnected = true;
+                    showUI(); // Force elements to stay wide awake
                     return;
                 }
 
@@ -222,7 +224,6 @@
                            !label.includes('default');
                 });
 
-                // Force creation if stream doesn't exist
                 if (!stream) {
                     const targetVideoId = externalVideoDevices[0].deviceId;
                     
@@ -262,17 +263,13 @@
                     videoEl.srcObject = stream;
                 }
 
-                // CONSTANT ASSURANCE SYSTEM: Update general layout parameters safely
                 hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
                 hud.style.color = '#fff';
                 resetFadeTimer();
 
-                // BANNER FORCED TRIGGER ENGINE
-                // If a device is present and we were previously unlinked, pop up the OSD banner immediately!
                 if (wasDisconnected && stream) {
                     wasDisconnected = false; 
                     
-                    // Stabilize metadata reading pipelines
                     await new Promise(resolve => setTimeout(resolve, 400));
 
                     const videoTrack = stream.getVideoTracks()[0];
@@ -291,6 +288,7 @@
 
             } catch (err) {
                 console.error("Hardware filter check failed:", err);
+                clearTimeout(fadeTimeout); // Intercept timer crashes too
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                     stream = null;
