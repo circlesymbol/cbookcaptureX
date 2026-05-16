@@ -82,9 +82,10 @@
                 permStream.getTracks().forEach(track => track.stop()); // Instantly release testing track
 
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-                // Step 2: Look for authentic external capture hardware labels
-                const externalDevices = videoDevices.filter(device => {
+                // Step 2: Filter for external capture video hardware
+                const externalVideoDevices = videoDevices.filter(device => {
                     const label = device.label.toLowerCase();
                     return !label.includes('integrated') && 
                            !label.includes('internal') && 
@@ -93,8 +94,7 @@
                 });
 
                 // UNPLUGGED / DISCONNECTED PROTECTION
-                if (externalDevices.length === 0) {
-                    // If a stream was active, kill it completely right now
+                if (externalVideoDevices.length === 0) {
                     if (stream) {
                         stream.getTracks().forEach(track => track.stop());
                         stream = null;
@@ -109,22 +109,41 @@
                     return;
                 }
 
-                // Step 3: Spin up the actual 60fps link if it isn't running yet
+                // Step 3: Filter for external capture audio hardware
+                const externalAudioDevices = audioDevices.filter(device => {
+                    const label = device.label.toLowerCase();
+                    return !label.includes('internal') && 
+                           !label.includes('integrated') && 
+                           !label.includes('mic') && 
+                           (label.includes('usb') || label.includes('capture') || label.includes('digital'));
+                });
+
+                // Step 4: Spin up the dual-channel stream using exact target device IDs
                 if (!stream) {
-                    const targetDeviceId = externalDevices[0].deviceId;
+                    const targetVideoId = externalVideoDevices[0].deviceId;
                     
+                    // Fall back to default audio if no specific external USB mic identifier is found
+                    const audioConstraint = externalAudioDevices.length > 0 
+                        ? { 
+                            deviceId: { exact: externalAudioDevices[0].deviceId },
+                            echoCancellation: false, 
+                            noiseSuppression: false, 
+                            autoGainControl: false 
+                          }
+                        : { 
+                            echoCancellation: false, 
+                            noiseSuppression: false, 
+                            autoGainControl: false 
+                          };
+
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: { 
-                            deviceId: { exact: targetDeviceId },
+                            deviceId: { exact: targetVideoId },
                             width: { ideal: 1920 }, 
                             height: { ideal: 1080 }, 
                             frameRate: { ideal: 60 } 
                         },
-                        audio: { 
-                            echoCancellation: false, 
-                            noiseSuppression: false, 
-                            autoGainControl: false 
-                        }
+                        audio: audioConstraint
                     });
 
                     videoEl.srcObject = stream;
@@ -134,7 +153,6 @@
 
             } catch (err) {
                 console.error("Hardware filter check failed:", err);
-                // If anything crashes during parsing, make sure old stream assets are scrubbed
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                     stream = null;
@@ -178,7 +196,6 @@
                     setTimeout(() => {
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
-                        // Only reset text to record prompt if stream wasn't destroyed while recording
                         if (stream) {
                             hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
                         }
@@ -208,7 +225,6 @@
             toggleRecording();
         });
 
-        // The listener that catches when hardware is added or removed dynamically
         navigator.mediaDevices.addEventListener('devicechange', verifyAndInitCapture);
         window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
     </script>
