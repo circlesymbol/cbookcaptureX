@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>cbookcaptureX/title>
+    <title>60fps Local Web Capture</title>
     <style>
         * {
             box-sizing: border-box;
@@ -318,23 +318,12 @@
                         audio: audioConstraint
                     });
 
-                    hiddenVideo.srcObject = stream;
+                    // Split-stream pipeline prevents duplicate audio engine processing
+                    const videoOnlyStream = new MediaStream(stream.getVideoTracks());
+                    hiddenVideo.srcObject = videoOnlyStream;
+                    
                     hiddenVideo.onloadedmetadata = () => {
-                       hiddenVideo.srcObject = stream;
-hiddenVideo.onloadedmetadata = () => {
-    hiddenVideo.muted = true; 
-    
-    hiddenVideo.play();
-    startCanvasRender();
-    
-    try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        source.connect(audioContext.destination);
-    } catch (audioErr) {
-        console.error("Audio monitoring setup failed:", audioErr);
-    }
-}; hiddenVideo.play();
+                        hiddenVideo.play();
                         startCanvasRender();
                         
                         try {
@@ -365,7 +354,7 @@ hiddenVideo.onloadedmetadata = () => {
                 console.error(err);
                 wasDisconnected = true;
             }
-        } // <--- verifyAndInitCapture closes correctly here
+        }
 
         function updateOSD(deviceLabel) {
             const videoTrack = stream?.getVideoTracks()[0];
