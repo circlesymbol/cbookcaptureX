@@ -148,6 +148,10 @@
     
     <div id="controls-wrapper" style="display: none;">
         <select id="res-selector">
+            <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
+            <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
+            <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
+            <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
             <option value='{"w":1920,"h":1080,"fps":60}'>1080p Full HD @ 60Hz</option>
             <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
             <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
@@ -195,7 +199,7 @@
         let blockFadingForNotice = false;
 
         function resetFadeTimer() {
-            if (blockFadingForNotice) return; // Keeps fallback warning visible
+            if (blockFadingForNotice) return;
             showUI();
             clearTimeout(fadeTimeout);
             if (allowUIFading) {
@@ -317,12 +321,10 @@
             return null;
         }
 
-        // Dropdown Switcher with Integrated Fallback Detector
         resSelector.addEventListener('change', async () => {
             const videoTrack = stream?.getVideoTracks()[0];
             if (!videoTrack) return;
 
-            // Clear any lingering fallback alerts
             clearTimeout(fallbackNoticeTimeout);
             blockFadingForNotice = false;
 
@@ -341,10 +343,7 @@
                 if (trueSettings) {
                     const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
                     
-                    // Check if browser was forced to step down from requested width, height, or frame rate
                     if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
-                        
-                        // Fire the fallback message directly into the HUD notice area
                         blockFadingForNotice = true;
                         showUI();
                         
@@ -352,7 +351,6 @@
                         hud.style.color = '#ffaa00';
                         hud.innerText = `⚠️ Device does not support requested format! Fallback: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
                         
-                        // Clear warning after 5 seconds and restore standard spacebar prompt
                         fallbackNoticeTimeout = setTimeout(() => {
                             blockFadingForNotice = false;
                             if (!isRecording) {
@@ -370,8 +368,6 @@
 
         function toggleRecording() {
             if (!stream) return;
-            
-            // Clear fallback text immediately if user forces a recording start
             clearTimeout(fallbackNoticeTimeout);
             blockFadingForNotice = false;
 
