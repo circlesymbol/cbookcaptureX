@@ -61,7 +61,7 @@
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Auto-Filtering Webcam...</div>
+    <div id="hud">⏳ Mapping Hardware Groups...</div>
     <button id="click-trigger">🔴 Record</button>
 
     <script>
@@ -78,11 +78,13 @@
             if (stream) return;
 
             try {
-                // Step 1: Request permission to instantly unlock hardware text labels
+                // Step 1: Fire up an initial stream to clear privacy restrictions
                 const initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                initStream.getTracks().forEach(track => track.stop()); // Instantly shut off the camera
+                initStream.getTracks().forEach(track => track.stop()); // Immediately release
 
+                // Separate our audio inputs and video inputs
+                const audioDevices = devices.filter(d => d.kind === 'audioinput');
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
 
                 if (videoDevices.length === 0) {
@@ -93,27 +95,31 @@
 
                 let targetDeviceId = null;
 
-                // Step 2: Run a strict name-blacklist scan across all connected items
-                const externalCard = videoDevices.find(device => {
+                // Step 2: Locate the external USB Audio device profile
+                const externalAudio = audioDevices.find(device => {
                     const label = device.label.toLowerCase();
-                    // Filters out any variation of a built-in camera name
-                    return !label.includes('integrated') && 
-                           !label.includes('internal') && 
-                           !label.includes('front') && 
-                           !label.includes('webcam') &&
-                           !label.includes('virtual');
+                    return label.includes('usb') || label.includes('capture') || label.includes('digital');
                 });
 
-                // If an external device passes the blacklist filter, use its specific hardware ID
-                if (externalCard) {
-                    targetDeviceId = externalCard.deviceId;
-                    console.log(`Bypassed webcam. Locked onto capture device: ${externalCard.label}`);
-                } else {
-                    // Fallback to the first available camera if no external label matches
-                    targetDeviceId = videoDevices[0].deviceId;
+                // Step 3: Match the Video device sharing that exact group signature
+                if (externalAudio && externalAudio.groupId) {
+                    const matchingVideo = videoDevices.find(video => video.groupId === externalAudio.groupId);
+                    if (matchingVideo) {
+                        targetDeviceId = matchingVideo.deviceId;
+                        console.log(`Hardware Group Match Successful: ${matchingVideo.label}`);
+                    }
                 }
 
-                // Step 3: Spin up the 60fps high-quality video/raw audio layout
+                // Fallback to our name blacklist if the group matching signature isn't found
+                if (!targetDeviceId) {
+                    const externalCard = videoDevices.find(device => {
+                        const label = device.label.toLowerCase();
+                        return !label.includes('integrated') && !label.includes('internal') && !label.includes('front');
+                    });
+                    targetDeviceId = externalCard ? externalCard.deviceId : videoDevices[0].deviceId;
+                }
+
+                // Step 4: Stream initialization
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
                         deviceId: { exact: targetDeviceId },
@@ -129,14 +135,11 @@
                 });
 
                 videoEl.srcObject = stream;
-                
-                // Print device active confirmation text directly to the HUD display
-                const finalLabel = externalCard ? externalCard.label : "USB Video";
-                hud.innerText = `📺 Live: ${finalLabel} | Press [SPACEBAR] to Record`;
+                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
                 hud.style.color = '#fff';
 
             } catch (err) {
-                console.error("Capture failure:", err);
+                console.error("Group initialization failed:", err);
                 hud.innerText = `❌ Hardware Setup Error: ${err.name}`;
                 hud.style.color = '#ff3333';
             }
