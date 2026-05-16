@@ -80,7 +80,7 @@
             visibility: hidden;
             transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s, visibility 0.35s;
             pointer-events: none;
-            border-left: 4px solid #00E676; /* Accent bar highlighting active connection status */
+            border-left: 4px solid #00E676; /* Green accent line */
         }
         #tv-banner.banner-active {
             transform: translateY(0);
@@ -166,13 +166,11 @@
         function triggerTVBanner(rawDeviceName, width, height, fps) {
             clearTimeout(tvBannerTimeout);
             
-            // Assign the actual structural hardware strings cleanly
             tvInputTitle.innerText = rawDeviceName;
             tvInputSpecs.innerText = `${width} × ${height} @ ${fps}Hz`;
             
             tvBanner.classList.add('banner-active');
             
-            // Displays specs for exactly 4 seconds before cleanly transition dropping away
             tvBannerTimeout = setTimeout(() => {
                 tvBanner.classList.remove('banner-active');
             }, 4000);
@@ -262,19 +260,21 @@
                     
                     resetFadeTimer();
 
-                    // Track accurate output metadata configurations directly out of active hardware pipe
-                    const videoTrack = stream.getVideoTracks()[0];
-                    const settings = videoTrack.getSettings();
-                    
-                    // Pull unedited hardware name string
-                    const rawName = externalVideoDevices[0].label || "Unknown USB Capture Card";
+                    // NEW: Wait 500ms for ChromeOS to populate hardware track metadata settings properly
+                    await new Promise(resolve => setTimeout(resolve, 500));
 
-                    triggerTVBanner(
-                        rawName, 
-                        settings.width || 1920, 
-                        settings.height || 1080, 
-                        Math.round(settings.frameRate || 60)
-                    );
+                    const videoTrack = stream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        const settings = videoTrack.getSettings();
+                        const rawName = externalVideoDevices[0].label || "Unknown USB Capture Card";
+
+                        triggerTVBanner(
+                            rawName, 
+                            settings.width || 1920, 
+                            settings.height || 1080, 
+                            Math.round(settings.frameRate || 60)
+                        );
+                    }
                 }
 
             } catch (err) {
