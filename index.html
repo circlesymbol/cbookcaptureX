@@ -23,8 +23,8 @@
             display: block;
         }
         
-        /* Interactive Control Elements Base Layout */
-        #hud, #controls-wrapper {
+        /* Interactive Control Elements */
+        #hud, #click-trigger {
             position: fixed;
             z-index: 999999;
             transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
@@ -46,41 +46,9 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
 
-        /* Unified Bottom-Right Control Panel */
-        #controls-wrapper {
+        #click-trigger {
             bottom: 15px;
             right: 15px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        /* Clean Hardware Selector Dropdown Styling */
-        #res-selector {
-            padding: 11px 15px;
-            background: rgba(30, 30, 30, 0.9);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            outline: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-            transition: border-color 0.2s, background-color 0.2s;
-        }
-        #res-selector:hover {
-            background: rgba(45, 45, 45, 0.95);
-            border-color: rgba(255, 255, 255, 0.4);
-        }
-        #res-selector option {
-            background: #1e1e1e;
-            color: #fff;
-            font-family: sans-serif;
-        }
-
-        #click-trigger {
             padding: 12px 20px;
             background: #ff3333;
             color: #fff;
@@ -90,6 +58,7 @@
             font-size: 14px;
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            display: block; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
         }
         #click-trigger:hover {
@@ -149,11 +118,7 @@
 
     <video id="v" autoplay playsinline></video>
     <div id="hud">⏳ Checking Hardware Connection...</div>
-    
-    <div id="controls-wrapper" style="display: none;">
-        <select id="res-selector"></select>
-        <button id="click-trigger">🔴 Record</button>
-    </div>
+    <button id="click-trigger">🔴 Record</button>
 
     <div id="tv-banner">
         <div id="tv-input-title">DETECTING DEVICE...</div>
@@ -163,8 +128,6 @@
     <script>
         const videoEl = document.getElementById('v');
         const hud = document.getElementById('hud');
-        const controlsWrapper = document.getElementById('controls-wrapper');
-        const resSelector = document.getElementById('res-selector');
         const clickTrigger = document.getElementById('click-trigger');
         const tvBanner = document.getElementById('tv-banner');
         const tvInputTitle = document.getElementById('tv-input-title');
@@ -188,14 +151,6 @@
         let wasDisconnected = true;
         let allowUIFading = false;
 
-        // Clean Menu Profiles List
-        const resolutionTargets = [
-            { label: "1080p FHD (@ 60)", w: 1920, h: 1080, fps: 60 },
-            { label: "1080p FHD (@ 30)", w: 1920, h: 1080, fps: 30 },
-            { label: "720p HD (@ 60)", w: 1280, h: 720, fps: 60 },
-            { label: "480p SD (@ 60)", w: 854, h: 480, fps: 60 }
-        ];
-
         function resetFadeTimer() {
             showUI();
             clearTimeout(fadeTimeout);
@@ -209,15 +164,15 @@
             if (!isRecording) {
                 hud.classList.remove('ui-hidden');
             }
-            if (controlsWrapper.style.display !== 'none') {
-                controlsWrapper.classList.remove('ui-hidden');
+            if (clickTrigger.style.display !== 'none') {
+                clickTrigger.classList.remove('ui-hidden');
             }
             document.body.classList.remove('hide-cursor');
         }
 
         function hideUI() {
             hud.classList.add('ui-hidden');
-            controlsWrapper.classList.add('ui-hidden');
+            clickTrigger.classList.add('ui-hidden');
             document.body.classList.add('hide-cursor');
         }
 
@@ -239,19 +194,6 @@
             const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
             const secs = (totalSeconds % 60).toString().padStart(2, '0');
             return `${hrs}:${mins}:${secs}`;
-        }
-
-        // SAFE BUILD: Populates the menu directly without querying broken hardware capabilities properties
-        function buildResolutionMenu() {
-            if (resSelector.children.length > 0) return; // Already built
-            
-            resSelector.innerHTML = "";
-            resolutionTargets.forEach(target => {
-                const opt = document.createElement('option');
-                opt.value = JSON.stringify({ w: target.w, h: target.h, fps: target.fps });
-                opt.textContent = target.label;
-                resSelector.appendChild(opt);
-            });
         }
 
         async function verifyAndInitCapture() {
@@ -285,7 +227,7 @@
                         clickTrigger.innerText = "🔴 Record";
                     }
                     
-                    controlsWrapper.style.display = 'none'; 
+                    clickTrigger.style.display = 'none'; 
                     hud.style.display = 'block'; 
                     
                     videoEl.srcObject = null;
@@ -297,23 +239,9 @@
                     return;
                 }
 
-                const externalAudioDevices = audioDevices.filter(device => {
-                    const label = device.label.toLowerCase();
-                    return !label.includes('internal') && 
-                           !label.includes('integrated') && 
-                           !label.includes('built-in') &&
-                           !label.includes('default');
-                });
-
-                const targetVideoId = externalVideoDevices[0].deviceId;
-
-                // Build menu statically and safely
-                buildResolutionMenu();
-
-                // Pull value safely from menu selection configuration
-                const selectedProfile = JSON.parse(resSelector.value || '{"w":1920,"h":1080,"fps":60}');
-
                 if (!stream) {
+                    const targetVideoId = externalVideoDevices[0].deviceId;
+                    
                     let audioConstraint;
                     if (externalAudioDevices.length > 0) {
                         audioConstraint = { 
@@ -340,9 +268,9 @@
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: { 
                             deviceId: { exact: targetVideoId },
-                            width: { ideal: selectedProfile.w }, 
-                            height: { ideal: selectedProfile.h }, 
-                            frameRate: { ideal: selectedProfile.fps } 
+                            width: { ideal: 1920 }, 
+                            height: { ideal: 1080 }, 
+                            frameRate: { ideal: 60 } 
                         },
                         audio: audioConstraint
                     });
@@ -350,7 +278,7 @@
                     videoEl.srcObject = stream;
                 }
 
-                controlsWrapper.style.display = 'flex';
+                clickTrigger.style.display = 'block';
 
                 if (!isRecording) {
                     hud.style.display = 'block';
@@ -373,20 +301,20 @@
 
                         triggerTVBanner(
                             rawName, 
-                            settings.width || selectedProfile.w, 
-                            settings.height || selectedProfile.h, 
-                            Math.round(settings.frameRate || selectedProfile.fps)
+                            settings.width || 1920, 
+                            settings.height || 1080, 
+                            Math.round(settings.frameRate || 60)
                         );
                     }
                 }
 
             } catch (err) {
-                console.error("Hardware pipeline initiation failed:", err);
+                console.error("Hardware filter check failed:", err);
                 allowUIFading = false;
                 clearTimeout(fadeTimeout);
                 clearInterval(recordingInterval);
                 
-                controlsWrapper.style.display = 'none';
+                clickTrigger.style.display = 'none';
                 hud.style.display = 'block';
                 
                 if (stream) {
@@ -401,32 +329,6 @@
             }
         }
 
-        // Dynamically alter track profiles cleanly on modification change events
-        resSelector.addEventListener('change', async () => {
-            const videoTrack = stream?.getVideoTracks()[0];
-            if (!videoTrack) return;
-
-            try {
-                const targetProfile = JSON.parse(resSelector.value);
-                
-                await videoTrack.applyConstraints({
-                    width: { ideal: targetProfile.w },
-                    height: { ideal: targetProfile.h },
-                    frameRate: { ideal: targetProfile.fps }
-                });
-
-                const settings = videoTrack.getSettings();
-                triggerTVBanner(
-                    "Format Updated", 
-                    settings.width || targetProfile.w, 
-                    settings.height || targetProfile.h, 
-                    Math.round(settings.frameRate || targetProfile.fps)
-                );
-            } catch (err) {
-                console.error("Format configuration switch failed:", err);
-            }
-        });
-
         function toggleRecording() {
             if (!stream) return;
 
@@ -435,9 +337,9 @@
                 recordedChunks = [];
                 recordingSeconds = 0;
 
+                // FORCE REPAINT IMMEDATELY: Change button interface properties before touching recording initialization
                 requestAnimationFrame(() => {
                     clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
-                    resSelector.style.display = 'none'; 
                     hud.classList.add('ui-hidden');
                     setTimeout(() => { 
                         if (isRecording) hud.style.display = 'none'; 
@@ -461,7 +363,6 @@
 
                 mediaRecorder.onstop = () => {
                     hud.style.display = 'block';
-                    resSelector.style.display = 'block'; 
                     hud.innerText = "⏳ Processing Video...";
                     showUI();
                     
@@ -469,10 +370,7 @@
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    
-                    const profile = JSON.parse(resSelector.value);
-                    a.download = `gameplay_${profile.h}p${profile.fps}_${Date.now()}.webm`;
-                    
+                    a.download = `gameplay_1080p60_${Date.now()}.webm`;
                     document.body.appendChild(a);
                     a.click();
                     
@@ -518,7 +416,7 @@
         window.addEventListener('touchstart', resetFadeTimer);
 
         window.onkeydown = (e) => {
-            if (controlsWrapper.style.display === 'none') return;
+            if (clickTrigger.style.display === 'none') return;
 
             if (e.code === 'Space') {
                 e.preventDefault();
@@ -533,15 +431,7 @@
             toggleRecording();
         });
 
-        navigator.mediaDevices.addEventListener('devicechange', () => {
-            resSelector.innerHTML = "";
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-            }
-            verifyAndInitCapture();
-        });
-        
+        navigator.mediaDevices.addEventListener('devicechange', verifyAndInitCapture);
         window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
     </script>
 </body>
