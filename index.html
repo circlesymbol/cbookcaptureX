@@ -59,7 +59,7 @@
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             display: block; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; /* Monospace stops shifting widths */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
         }
         #click-trigger:hover {
             background: #e60000;
@@ -82,7 +82,7 @@
             visibility: hidden;
             transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s, visibility 0.35s;
             pointer-events: none;
-            border-left: 4px solid #00E676; /* Green accent line */
+            border-left: 4px solid #00E676;
         }
         #tv-banner.banner-active {
             transform: translateY(0);
@@ -141,7 +141,6 @@
         let fadeTimeout;
         let tvBannerTimeout;
         
-        // Timer elements for recording clock tracking
         let recordingSeconds = 0;
         let recordingInterval = null;
         
@@ -162,7 +161,6 @@
         }
 
         function showUI() {
-            // Never bring back the HUD if we are currently recording
             if (!isRecording) {
                 hud.classList.remove('ui-hidden');
             }
@@ -191,7 +189,6 @@
             }, 4000);
         }
 
-        // Formats numerical seconds cleanly into 00:00:00
         function formatTimeString(totalSeconds) {
             const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
             const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -241,14 +238,6 @@
                     showUI(); 
                     return;
                 }
-
-                const externalAudioDevices = audioDevices.filter(device => {
-                    const label = device.label.toLowerCase();
-                    return !label.includes('internal') && 
-                           !label.includes('integrated') && 
-                           !label.includes('built-in') &&
-                           !label.includes('default');
-                });
 
                 if (!stream) {
                     const targetVideoId = externalVideoDevices[0].deviceId;
@@ -344,7 +333,19 @@
             if (!stream) return;
 
             if (!isRecording) {
+                isRecording = true;
                 recordedChunks = [];
+                recordingSeconds = 0;
+
+                // FORCE REPAINT IMMEDATELY: Change button interface properties before touching recording initialization
+                requestAnimationFrame(() => {
+                    clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
+                    hud.classList.add('ui-hidden');
+                    setTimeout(() => { 
+                        if (isRecording) hud.style.display = 'none'; 
+                    }, 400);
+                });
+
                 let options = { mimeType: 'video/webm;codecs=vp9' };
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options = { mimeType: 'video/webm;codecs=vp8' };
@@ -384,17 +385,8 @@
                 };
 
                 mediaRecorder.start(100);
-                isRecording = true;
                 
-                // 1. Instantly hide HUD bar layout completely
-                hud.classList.add('ui-hidden');
-                setTimeout(() => { hud.style.display = 'none'; }, 400); 
-
-                // FIXED: Establish the button innerText immediately at exactly 0 seconds
-                recordingSeconds = 0;
-                clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
-                
-                // 2. Fire clock generation cycle running every 1000ms
+                clearInterval(recordingInterval);
                 recordingInterval = setInterval(() => {
                     recordingSeconds++;
                     clickTrigger.innerText = `⏹️ Stop [${formatTimeString(recordingSeconds)}]`;
