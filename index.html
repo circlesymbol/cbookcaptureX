@@ -344,13 +344,16 @@
                 if (trueSettings) {
                     const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
                     
-                    if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
-                        blockFadingForNotice = true;
-                        showUI();
-                        
-                        hud.style.display = 'block';
-                        hud.style.color = '#ffaa00';
-                        hud.innerText = `⚠️ Device does not support requested format! Currently Displaying: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
+           if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
+    blockFadingForNotice = true;
+    showUI();
+    
+    hud.style.display = 'block';
+    hud.style.color = '#ffaa00';
+    hud.innerText = `⚠️ Device does not support requested format! Fallback: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
+    
+    // FIX: Force the dropdown selection menu to snap back to the actual fallback mode
+    resSelector.value = JSON.stringify({ w: trueSettings.width, h: trueSettings.height, fps: roundedFrameRate });
                         
                         fallbackNoticeTimeout = setTimeout(() => {
                             blockFadingForNotice = false;
