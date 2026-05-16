@@ -61,7 +61,7 @@
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Auto-Detecting 60fps Capture Card...</div>
+    <div id="hud">⏳ Initializing Capture Stream...</div>
     <button id="click-trigger">🔴 Record</button>
 
     <script>
@@ -78,54 +78,9 @@
             if (stream) return;
 
             try {
-                // Step 1: Pop permission request instantly to clear ChromeOS label blocks
-                const initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                initStream.getTracks().forEach(track => track.stop()); // Clear initial stream
-
-                const videoDevices = devices.filter(d => d.kind === 'videoinput');
-
-                if (videoDevices.length === 0) {
-                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
-                    hud.style.color = '#ffaa00';
-                    return;
-                }
-
-                let targetDeviceId = null;
-
-                // Step 2: Query the capabilities of each device to find the true 60fps source
-                for (const device of videoDevices) {
-                    try {
-                        const testStream = await navigator.mediaDevices.getUserMedia({
-                            video: { 
-                                deviceId: { exact: device.deviceId },
-                                frameRate: { min: 59 } // Demand high frame rate profiles
-                            }
-                        });
-                        
-                        // If it succeeds without throwing an error, this is our 60fps capture card!
-                        testStream.getTracks().forEach(track => track.stop());
-                        targetDeviceId = device.deviceId;
-                        break; 
-                    } catch (e) {
-                        // If it fails, it's just the 30fps internal webcam. Skip it.
-                        console.log(`Skipping 30fps device: ${device.label}`);
-                    }
-                }
-
-                // If the capability scan fails to find an exact match, fall back to the first non-internal device
-                if (!targetDeviceId) {
-                    const externalCard = videoDevices.find(device => {
-                        const label = device.label.toLowerCase();
-                        return !label.includes('internal') && !label.includes('integrated');
-                    });
-                    targetDeviceId = externalCard ? externalCard.deviceId : videoDevices[0].deviceId;
-                }
-
-                // Step 3: Launch the final target stream with completely unfiltered audio settings
+                // Pull the browser's default camera device (which we just forced to be the capture card)
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
-                        deviceId: { exact: targetDeviceId },
                         width: { ideal: 1920 }, 
                         height: { ideal: 1080 }, 
                         frameRate: { ideal: 60 } 
@@ -143,8 +98,8 @@
 
             } catch (err) {
                 console.error("Capture failure:", err);
-                hud.innerText = `❌ Hardware Setup Error: ${err.name}`;
-                hud.style.color = '#ff3333';
+                hud.innerText = `⚠️ No Device Detected or Permission Denied.`;
+                hud.style.color = '#ffaa00';
             }
         }
 
@@ -214,10 +169,6 @@
         clickTrigger.addEventListener('click', (e) => {
             e.blur(); 
             toggleRecording();
-        });
-
-        navigator.mediaDevices.addEventListener('devicechange', () => {
-            if (!stream) initCapture();
         });
 
         window.addEventListener('DOMContentLoaded', initCapture);
