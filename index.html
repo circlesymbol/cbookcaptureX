@@ -144,11 +144,16 @@
         const movementThreshold = 10;
         
         let wasDisconnected = true;
+        
+        // NEW STATE GUARDIAN: Hard lock that controls whether elements can fade
+        let allowUIFading = false;
 
         function resetFadeTimer() {
             showUI();
             clearTimeout(fadeTimeout);
-            if (stream) {
+            
+            // Absolute check against our explicit state rule
+            if (allowUIFading) {
                 fadeTimeout = setTimeout(hideUI, 3000);
             }
         }
@@ -196,7 +201,8 @@
                 });
 
                 if (externalVideoDevices.length === 0) {
-                    // CRITICAL FIX: Instantly kill the fade timer loop so it can't hide our error text
+                    // KILL TIMERS IMMEDIATELY
+                    allowUIFading = false; 
                     clearTimeout(fadeTimeout);
                     
                     if (stream) {
@@ -212,7 +218,7 @@
                     hud.style.color = '#ffaa00';
                     tvBanner.classList.remove('banner-active'); 
                     wasDisconnected = true;
-                    showUI(); // Force elements to stay wide awake
+                    showUI(); // Force layout wide awake
                     return;
                 }
 
@@ -265,6 +271,9 @@
 
                 hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
                 hud.style.color = '#fff';
+                
+                // UNLOCK FADING ONLY NOW: Feed is safe and verified
+                allowUIFading = true;
                 resetFadeTimer();
 
                 if (wasDisconnected && stream) {
@@ -288,7 +297,8 @@
 
             } catch (err) {
                 console.error("Hardware filter check failed:", err);
-                clearTimeout(fadeTimeout); // Intercept timer crashes too
+                allowUIFading = false;
+                clearTimeout(fadeTimeout);
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                     stream = null;
