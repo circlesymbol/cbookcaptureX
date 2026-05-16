@@ -260,11 +260,6 @@ function startCanvasRender() {
     }
     requestAnimationFrame(render);
 }
-        // Ensure this is sitting right outside of your functions near your other global variables
-const hiddenVideo = document.createElement('video');
-hiddenVideo.autoplay = true;
-hiddenVideo.playsinline = true;
-hiddenVideo.muted = true;
         
         async function verifyAndInitCapture() {
     const resSelector = document.getElementById('res-selector');
