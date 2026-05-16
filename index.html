@@ -148,12 +148,12 @@
     
     <div id="controls-wrapper" style="display: none;">
         <select id="res-selector">
-            <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
-            <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
+            <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
+            <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
             <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
             <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
-            <option value='{"w":1920,"h":1080,"fps":60}'>1080p Full HD @ 60Hz</option>
-            <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
+            <option value='{"w":3840,"h":2160,"fps":60}'>44K Ultra HD @ 60Hz</option>
+            <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
             <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
             <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
             <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
@@ -266,6 +266,8 @@
 
                 if (!stream) {
                     const targetVideoId = externalVideoDevices[0].deviceId;
+                    
+                    // Always read whatever profile is currently highlighted in the HTML dropdown on boot
                     const selectedProfile = JSON.parse(resSelector.value);
 
                     let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
