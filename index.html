@@ -240,7 +240,7 @@
 
         function startCanvasRender() {
             const canvas = document.getElementById('v');
-            const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }); 
+            const ctx = canvas.getContext('2d', { alpha: false, desynchronized: false }); 
             
             function render() {
                 if (hiddenVideo.readyState === hiddenVideo.HAVE_ENOUGH_DATA) {
