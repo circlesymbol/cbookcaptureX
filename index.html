@@ -264,29 +264,28 @@
                     return;
                 }
 
-                if (!stream) {
-                    const targetVideoId = externalVideoDevices[0].deviceId;
-                    const selectedProfile = JSON.parse(resSelector.value);
+              if (!stream) {
+    // FIX: Properly extract and declare the targetVideoId from the filtered device array
+    const targetVideoId = externalVideoDevices[0].deviceId;
+    const selectedProfile = JSON.parse(resSelector.value);
 
-                    let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-                    const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
-                    if (externalAudioDevices.length > 0) {
-                        audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
-                    }
+    let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+    const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
+    if (externalAudioDevices.length > 0) {
+        audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
+    }
 
-                   const selectedProfile = JSON.parse(resSelector.value);
-
-stream = await navigator.mediaDevices.getUserMedia({
-    video: { 
-        deviceId: targetVideoId, // Removes strict 'exact' wrapping to prevent profile selection crashes
-        width: { ideal: selectedProfile.w }, 
-        height: { ideal: selectedProfile.h }, 
-        frameRate: { ideal: selectedProfile.fps } 
-    },
-    audio: audioConstraint
-});
-                    videoEl.srcObject = stream;
-                }
+    stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+            deviceId: targetVideoId,
+            width: { ideal: selectedProfile.w }, 
+            height: { ideal: selectedProfile.h }, 
+            frameRate: { ideal: selectedProfile.fps } 
+        },
+        audio: audioConstraint
+    });
+    videoEl.srcObject = stream;
+}
 
                 controlsWrapper.style.display = 'flex';
                 if (!isRecording && !blockFadingForNotice) {
