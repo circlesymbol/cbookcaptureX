@@ -23,11 +23,10 @@
             display: block;
         }
         
-        /* Added smooth transitions for fading elements */
         #hud, #click-trigger {
             position: fixed;
             z-index: 999999;
-            transition: opacity 0.4s ease, visibility 0.4s ease;
+            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
             opacity: 1;
             visibility: visible;
         }
@@ -63,11 +62,15 @@
             background: #e60000;
         }
 
-        /* Utility class to handle the clean fade state out of sight */
+        /* Strict hidden class that drops pointer priority */
         .ui-hidden {
             opacity: 0 !important;
             visibility: hidden !important;
-            cursor: none; /* Hides the mouse pointer entirely when UI fades */
+            pointer-events: none !important;
+        }
+        
+        .hide-cursor {
+            cursor: none !important;
         }
     </style>
 </head>
@@ -88,27 +91,31 @@
         let stream = null;
         
         let fadeTimeout;
+        
+        // Track exact mouse coordinates to block micro-vibrations
+        let lastX = 0;
+        let lastY = 0;
+        const movementThreshold = 10; // Must move more than 10 pixels to wake up
 
-        // Fades UI out after inactivity
         function resetFadeTimer() {
             showUI();
             clearTimeout(fadeTimeout);
             
-            // Only auto-fade if everything is connected and working normally
             if (stream) {
-                fadeTimeout = setTimeout(hideUI, 3000); // 3000ms = 3 seconds
+                fadeTimeout = setTimeout(hideUI, 3000); // 3 seconds
             }
         }
 
         function showUI() {
             hud.classList.remove('ui-hidden');
             clickTrigger.classList.remove('ui-hidden');
-            document.body.style.cursor = 'default';
+            document.body.classList.remove('hide-cursor');
         }
 
         function hideUI() {
             hud.classList.add('ui-hidden');
             clickTrigger.classList.add('ui-hidden');
+            document.body.classList.add('hide-cursor');
         }
 
         async function verifyAndInitCapture() {
@@ -140,7 +147,7 @@
                     videoEl.srcObject = null;
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                     hud.style.color = '#ffaa00';
-                    showUI(); // Keep error visible
+                    showUI();
                     return;
                 }
 
@@ -192,7 +199,6 @@
                     hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
                     hud.style.color = '#fff';
                     
-                    // Kick off our fade timer loop now that the feed is healthy
                     resetFadeTimer();
                 }
 
@@ -231,7 +237,7 @@
 
                 mediaRecorder.onstop = () => {
                     hud.innerText = "⏳ Processing Video...";
-                    showUI(); // Hold UI awake while building file download
+                    showUI();
                     
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     const url = URL.createObjectURL(blob);
@@ -255,7 +261,7 @@
                 isRecording = true;
                 hud.innerText = "⏺️ RECORDING LIVE (Press SPACEBAR to Stop)";
                 clickTrigger.innerText = "⏹️ Stop";
-                resetFadeTimer(); // Briefly flash the updated recording status text
+                resetFadeTimer();
             } else {
                 mediaRecorder.stop();
                 isRecording = false;
@@ -264,8 +270,19 @@
             }
         }
 
-        // Global listeners to instantly reset fade timer on user interaction
-        window.addEventListener('mousemove', resetFadeTimer);
+        // Smart mouse listener that ignores micro wiggles
+        window.addEventListener('mousemove', (e) => {
+            const deltaX = Math.abs(e.clientX - lastX);
+            const deltaY = Math.abs(e.clientY - lastY);
+            
+            if (deltaX > movementThreshold || deltaY > movementThreshold) {
+                resetFadeTimer();
+            }
+            
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
         window.addEventListener('touchstart', resetFadeTimer);
 
         window.onkeydown = (e) => {
@@ -273,7 +290,7 @@
                 e.preventDefault();
                 toggleRecording();
             } else {
-                resetFadeTimer(); // Any other key press brings back UI lines
+                resetFadeTimer();
             }
         };
 
