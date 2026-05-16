@@ -37,7 +37,6 @@
             border: 1px solid rgba(255,255,255,0.1);
             transition: color 0.2s ease;
         }
-        /* Hidden button for touch/click backup if keyboard isn't present */
         #click-trigger {
             position: fixed;
             bottom: 15px;
@@ -59,7 +58,7 @@
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Checking Hardware Connection...</div>
+    <div id="hud">⏳ Initializing Capture Stream...</div>
     <button id="click-trigger">Toggle Record</button>
 
     <script>
@@ -72,51 +71,76 @@
         let isRecording = false;
         let stream = null;
 
-        // Function to check hardware availability and initialize
-        async function checkAndInitCapture() {
+        async function initCapture() {
+            if (stream) return; // Stream is already running smoothly
+
+            hud.innerText = "⏳ Requesting Capture Card Permissions...";
+            hud.style.color = '#fff';
+
             try {
-                // Enumerate devices to see if any camera/capture source exists
+                // Request stream using 'ideal' parameters first to avoid OverconstrainedError crashes
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 1920 }, 
+                        height: { ideal: 1080 }, 
+                        frameRate: { ideal: 60 } 
+                    },
+                    audio: { 
+                        echoCancellation: false, 
+                        noiseSuppression: false, 
+                        autoGainControl: false 
+                    }
+                });
+
+                videoEl.srcObject = stream;
+                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                hud.style.color = '#fff';
+
+            } catch (err) {
+                console.error("Capture failure:", err);
+                handleCaptureError(err);
+            }
+        }
+
+        // Dedicated error analyzer to check hardware status when things fail
+        async function handleCaptureError(err) {
+            try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const hasVideoInput = devices.some(device => device.kind === 'videoinput');
 
                 if (!hasVideoInput) {
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                     hud.style.color = '#ffaa00';
-                    if (stream) {
-                        stream.getTracks().forEach(track => track.stop());
-                        videoEl.srcObject = null;
-                        stream = null;
-                    }
-                    return;
+                } else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+                    hud.innerText = "⚠️ Hardware Constraint Warning: Attempting fallback resolution...";
+                    hud.style.color = '#ffaa00';
+                    attemptFallbackCapture();
+                } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    hud.innerText = "❌ Blocked: Please allow camera/mic access in browser bar.";
+                    hud.style.color = '#ff3333';
+                } else {
+                    hud.innerText = `❌ Connection Error: ${err.name}`;
+                    hud.style.color = '#ff3333';
                 }
-
-                // If a device is found and stream isn't already active, start it
-                if (!stream) {
-                    hud.innerText = "⏳ Requesting Capture Card Permissions...";
-                    hud.style.color = '#fff';
-
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: { 
-                            width: 1920, 
-                            height: 1080, 
-                            frameRate: { ideal: 60, exact: 60 } 
-                        },
-                        audio: { 
-                            echoCancellation: false, 
-                            noiseSuppression: false, 
-                            autoGainControl: false 
-                        }
-                    });
-
-                    videoEl.srcObject = stream;
-                    hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                    hud.style.color = '#fff';
-                }
-
-            } catch (err) {
-                hud.innerText = "❌ Error: " + err.name;
+            } catch (deviceErr) {
+                hud.innerText = "❌ Failed to read hardware status.";
                 hud.style.color = '#ff3333';
-                console.error("Hardware initialization failed:", err);
+            }
+        }
+
+        // Fallback option if the card absolutely refuses the requested 1080p60 container structure
+        async function attemptFallbackCapture() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true, // Pulls the card's native default resolution structure
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+                });
+                videoEl.srcObject = stream;
+                hud.innerText = "🔴 Running (Fallback Resolution) - Press [SPACEBAR] to Record";
+                hud.style.color = '#fff';
+            } catch (fallbackErr) {
+                hud.innerText = "❌ Capture Card format incompatible.";
+                hud.style.color = '#ff3333';
             }
         }
 
@@ -164,7 +188,6 @@
                     }, 150);
                 };
 
-                // Force 100ms chunks to embed stable timestamps for 60fps pacing
                 mediaRecorder.start(100);
                 isRecording = true;
                 hud.innerText = "⏺️ RECORDING LIVE (Press SPACEBAR to Stop)";
@@ -175,7 +198,6 @@
             }
         }
 
-        // Keyboard Shortcut Action
         window.onkeydown = (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
@@ -183,17 +205,17 @@
             }
         };
 
-        // Click/Touch Backup Action
         clickTrigger.addEventListener('click', (e) => {
             e.blur(); 
             toggleRecording();
         });
 
-        // Auto-detect when devices are plugged in or unplugged live
-        navigator.mediaDevices.addEventListener('devicechange', checkAndInitCapture);
+        // If you plug it in live, reset and run the checks again
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+            if (!stream) initCapture();
+        });
 
-        // Run check on initial page load
-        window.addEventListener('DOMContentLoaded', checkAndInitCapture);
+        window.addEventListener('DOMContentLoaded', initCapture);
     </script>
 </body>
 </html>
