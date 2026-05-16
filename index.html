@@ -74,13 +74,47 @@
         async function initCapture() {
             if (stream) return; 
 
-            hud.innerText = "⏳ Requesting Capture Card Permissions...";
+            hud.innerText = "⏳ Scanning for Capture Card...";
             hud.style.color = '#fff';
 
             try {
-                // Request stream using ideal parameters to avoid immediate overconstrained blocks
+                // First, ask for generic permission so the browser lets us see device names
+                const initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                
+                // Read the actual hardware list
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                
+                // Stop the initial temporary permission stream immediately
+                initialStream.getTracks().forEach(track => track.stop());
+
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                let targetDeviceId = null;
+
+                if (videoDevices.length === 0) {
+                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
+                    hud.style.color = '#ffaa00';
+                    return;
+                }
+
+                // Look for an external device by ignoring the built-in webcam labels
+                const externalCard = videoDevices.find(device => {
+                    const label = device.label.toLowerCase();
+                    return !label.includes('internal') && !label.includes('integrated') && !label.includes('front');
+                });
+
+                // Use the capture card if found, otherwise default to the first available video source
+                if (externalCard) {
+                    targetDeviceId = externalCard.deviceId;
+                    hud.innerText = `⏳ Connecting to: ${externalCard.label}...`;
+                } else {
+                    targetDeviceId = videoDevices[0].deviceId;
+                    hud.innerText = "⏳ No explicit external card found. Trying default device...";
+                }
+
+                // Launch the stream using the specific ID of your capture card
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
+                        deviceId: targetDeviceId ? { exact: targetDeviceId } : undefined,
                         width: { ideal: 1920 }, 
                         height: { ideal: 1080 }, 
                         frameRate: { ideal: 60 } 
@@ -98,52 +132,7 @@
 
             } catch (err) {
                 console.error("Capture failure:", err);
-                handleCaptureError(err);
-            }
-        }
-
-        // Dedicated error analyzer - no alert popups allowed
-        async function handleCaptureError(err) {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const hasVideoInput = devices.some(device => device.kind === 'videoinput');
-
-                // If no camera hardware profile is reported by ChromeOS
-                if (!hasVideoInput) {
-                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
-                    hud.style.color = '#ffaa00';
-                } 
-                // Handles the OverconstrainedError directly in the HUD text
-                else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
-                    hud.innerText = "⚠️ OverconstrainedError: Hardware is restricted. Trying fallback resolution...";
-                    hud.style.color = '#ffaa00';
-                    attemptFallbackCapture();
-                } 
-                else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                    hud.innerText = "❌ Blocked: Please allow camera/mic access in the browser address bar.";
-                    hud.style.color = '#ff3333';
-                } 
-                else {
-                    hud.innerText = `❌ Connection Error: ${err.name}`;
-                    hud.style.color = '#ff3333';
-                }
-            } catch (deviceErr) {
-                hud.innerText = "❌ Failed to read hardware status.";
-                hud.style.color = '#ff3333';
-            }
-        }
-
-        async function attemptFallbackCapture() {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: true, 
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-                });
-                videoEl.srcObject = stream;
-                hud.innerText = "🔴 Running (Fallback Mode) - Press [SPACEBAR] to Record";
-                hud.style.color = '#fff';
-            } catch (fallbackErr) {
-                hud.innerText = "❌ Capture Card format entirely incompatible.";
+                hud.innerText = `❌ Connection Error: ${err.name}`;
                 hud.style.color = '#ff3333';
             }
         }
