@@ -326,33 +326,24 @@ function startCanvasRender() {
                 audio: audioConstraint
             });
 
-            // Feed hardware stream to hidden memory layer
-            hiddenVideo.srcObject = stream;
-            hiddenVideo.onloadedmetadata = () => {
-                hiddenVideo.play();
-                startCanvasRender(); // Fire up ultra-lightweight GPU engine loop
-            };
-
-            controlsWrapper.style.display = 'flex';
-            if (!isRecording && !blockFadingForNotice) {
-                hud.style.display = 'block';
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                hud.style.color = '#fff';
-            }
-            allowUIFading = true;
-            resetFadeTimer();
-
-            if (wasDisconnected && stream) {
-                wasDisconnected = false;
-                await new Promise(r => setTimeout(r, 500));
-                updateOSD(externalVideoDevices[0].label);
-            }
-        }
-    } catch (err) {
-        console.error(err);
-        wasDisconnected = true;
+         // Feed hardware stream to hidden memory layer
+hiddenVideo.srcObject = stream;
+hiddenVideo.onloadedmetadata = () => {
+    hiddenVideo.play();
+    startCanvasRender(); // Fire up ultra-lightweight GPU engine loop
+    
+    // LIVE AUDIO MONITORING DIRECT BRIDGE:
+    // Route audio directly to headphones/speakers without touching the CPU main thread
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        
+        // Connect the capture card source straight to your system speakers
+        source.connect(audioContext.destination);
+    } catch (audioErr) {
+        console.error("Audio monitoring setup failed:", audioErr);
     }
-} // <--- END OF verifyAndInitCapture
+};
 
 function updateOSD(deviceLabel) {
     const videoTrack = stream?.getVideoTracks()[0];
