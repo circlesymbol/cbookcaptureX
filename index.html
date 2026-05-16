@@ -16,13 +16,13 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             user-select: none;
         }
-#v {
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-    display: block;
-    background: #000;
-}
+        #v {
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+            display: block;
+            background: #000;
+        }
         
         /* Controls Layout */
         #hud, #controls-wrapper {
@@ -145,23 +145,23 @@
 <body>
 
     <video id="hidden-audio-bridge" autoplay playsinline style="position: absolute; width: 1px; height: 1px; opacity: 0.01; pointer-events: none;"></video>
-<canvas id="v"></canvas>
+    <canvas id="v"></canvas>
     <div id="hud">⏳ Checking Hardware Connection...</div>
     
     <div id="controls-wrapper" style="display: none;">
-     <select id="res-selector">
-    <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
-    <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
-    <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
-    <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
-    <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
-    <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
-    <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
-    <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
-    <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
-    <option value='{"w":1280,"h":720,"fps":30}'>720p HD @ 30Hz</option>
-    <option value='{"w":854,"h":480,"fps":60}'>480p ED @ 60Hz</option>
-</select>
+        <select id="res-selector">
+            <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
+            <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
+            <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
+            <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
+            <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
+            <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
+            <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
+            <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
+            <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
+            <option value='{"w":1280,"h":720,"fps":30}'>720p HD @ 30Hz</option>
+            <option value='{"w":854,"h":480,"fps":60}'>480p ED @ 60Hz</option>
+        </select>
         <button id="click-trigger">🔴 Record</button>
     </div>
 
@@ -172,7 +172,6 @@
 
     <script>
         const hiddenVideo = document.getElementById('hidden-audio-bridge');
-        const videoEl = document.getElementById('v');
         const hud = document.getElementById('hud');
         const controlsWrapper = document.getElementById('controls-wrapper');
         const resSelector = document.getElementById('res-selector');
@@ -238,175 +237,184 @@
             const secs = (totalSeconds % 60).toString().padStart(2, '0');
             return `${hrs}:${mins}:${secs}`;
         }
-hiddenVideo.autoplay = true;
-hiddenVideo.playsinline = true;
-hiddenVideo.muted = true;
 
-function startCanvasRender() {
-    const canvas = document.getElementById('v');
-    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }); 
-    // 'desynchronized: true' tells ChromeOS to bypass the front-buffer completely for zero lag
-    
-    function render() {
-        if (hiddenVideo.readyState === hiddenVideo.HAVE_ENOUGH_DATA) {
-            // Match canvas size to the raw capture card resolution dynamically
-            if (canvas.width !== hiddenVideo.videoWidth) {
-                canvas.width = hiddenVideo.videoWidth;
-                canvas.height = hiddenVideo.videoHeight;
+        function startCanvasRender() {
+            const canvas = document.getElementById('v');
+            const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }); 
+            
+            function render() {
+                if (hiddenVideo.readyState === hiddenVideo.HAVE_ENOUGH_DATA) {
+                    if (canvas.width !== hiddenVideo.videoWidth) {
+                        canvas.width = hiddenVideo.videoWidth;
+                        canvas.height = hiddenVideo.videoHeight;
+                    }
+                    ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+                }
+                requestAnimationFrame(render);
             }
-            // Draw the frame directly via hardware acceleration
-            ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+            requestAnimationFrame(render);
         }
-        requestAnimationFrame(render);
-    }
-    requestAnimationFrame(render);
-}
         
         async function verifyAndInitCapture() {
-    const resSelector = document.getElementById('res-selector');
-    const hud = document.getElementById('hud');
-    
-    try {
-        const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        permStream.getTracks().forEach(track => track.stop());
-
-        const videoDevices = devices.filter(d => d.kind === 'videoinput');
-        const audioDevices = devices.filter(d => d.kind === 'audioinput');
-
-        const externalVideoDevices = videoDevices.filter(device => {
-            const label = device.label.toLowerCase();
-            return !label.includes('integrated') && !label.includes('internal') && !label.includes('front') && !label.includes('webcam');
-        });
-
-        if (externalVideoDevices.length === 0) {
-            allowUIFading = false;
-            clearInterval(recordingInterval);
-            if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-            controlsWrapper.style.display = 'none';
-            hud.style.display = 'block';
+            const resSelector = document.getElementById('res-selector');
+            const hud = document.getElementById('hud');
             
-            // Clear out canvas pixels on disconnect if needed
-            const canvas = document.getElementById('v');
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            hud.innerText = "⚠️ No Capture Card Detected! Please Check USB Connection!";
-            hud.style.color = '#ffaa00';
-            wasDisconnected = true;
-            showUI();
-            return;
-        }
+            try {
+                const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                permStream.getTracks().forEach(track => track.stop());
 
-        if (!stream) {
-            const targetVideoId = externalVideoDevices[0].deviceId;
-            const selectedProfile = JSON.parse(resSelector.value);
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-            // OPTIMIZED AUDIO CONSTRAINTS: Pins low-latency timeline clock
-            let audioConstraint = { 
-                echoCancellation: false, 
-                noiseSuppression: false, 
-                autoGainControl: false, 
-                latency: 0, 
-                channelCount: 2 
-            };
+                const externalVideoDevices = videoDevices.filter(device => {
+                    const label = device.label.toLowerCase();
+                    return !label.includes('integrated') && !label.includes('internal') && !label.includes('front') && !label.includes('webcam');
+                });
 
-            const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
-            if (externalAudioDevices.length > 0) {
-                audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
-            }
+                if (externalVideoDevices.length === 0) {
+                    allowUIFading = false;
+                    clearInterval(recordingInterval);
+                    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+                    controlsWrapper.style.display = 'none';
+                    hud.style.display = 'block';
+                    
+                    const canvas = document.getElementById('v');
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    hud.innerText = "⚠️ No Capture Card Detected! Please Check USB Connection!";
+                    hud.style.color = '#ffaa00';
+                    wasDisconnected = true;
+                    showUI();
+                    return;
+                }
 
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    deviceId: targetVideoId,
-                    width: { ideal: selectedProfile.w }, 
-                    height: { ideal: selectedProfile.h }, 
-                    frameRate: { ideal: selectedProfile.fps },
-                    latencyMode: 'low' 
-                },
-                audio: audioConstraint
-            });
+                if (!stream) {
+                    const targetVideoId = externalVideoDevices[0].deviceId;
+                    const selectedProfile = JSON.parse(resSelector.value);
 
-         // Feed hardware stream to hidden memory layer
-hiddenVideo.srcObject = stream;
-hiddenVideo.onloadedmetadata = () => {
-    hiddenVideo.play();
-    startCanvasRender(); // Fire up ultra-lightweight GPU engine loop
-    
-    // LIVE AUDIO MONITORING DIRECT BRIDGE:
-    // Route audio directly to headphones/speakers without touching the CPU main thread
-    try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        
-        // Connect the capture card source straight to your system speakers
-        source.connect(audioContext.destination);
-    } catch (audioErr) {
-        console.error("Audio monitoring setup failed:", audioErr);
-    }
-};
+                    let audioConstraint = { 
+                        echoCancellation: false, 
+                        noiseSuppression: false, 
+                        autoGainControl: false, 
+                        latency: 0, 
+                        channelCount: 2 
+                    };
 
-function updateOSD(deviceLabel) {
-    const videoTrack = stream?.getVideoTracks()[0];
-    if (videoTrack) {
-        const settings = videoTrack.getSettings();
-        triggerTVBanner(
-            deviceLabel || "USB Capture Card", 
-            settings.width || 1280, 
-            settings.height || 720, 
-            Math.round(settings.frameRate || 60)
-        );
-        return settings;
-    }
-    return null;
-}
-
-resSelector.addEventListener('change', async () => {
-    const videoTrack = stream?.getVideoTracks()[0];
-    if (!videoTrack) return;
-
-    clearTimeout(fallbackNoticeTimeout);
-    blockFadingForNotice = false;
-
-    try {
-        const requested = JSON.parse(resSelector.value);
-        
-        await videoTrack.applyConstraints({
-            width: { ideal: requested.w },
-            height: { ideal: requested.h },
-            frameRate: { ideal: requested.fps }
-        });
-        
-        await new Promise(r => setTimeout(r, 250));
-        const trueSettings = updateOSD("Updated Resolution Settings");
-
-        if (trueSettings) {
-            const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
-            
-            if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
-                blockFadingForNotice = true;
-                showUI();
-                
-                hud.style.display = 'block';
-                hud.style.color = '#ffaa00';
-                hud.innerText = `⚠️ Device does not support requested format! Fallback: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
-                
-                resSelector.value = JSON.stringify({ w: trueSettings.width, h: trueSettings.height, fps: roundedFrameRate });
-                
-                fallbackNoticeTimeout = setTimeout(() => {
-                    blockFadingForNotice = false;
-                    if (!isRecording) {
-                        hud.style.color = '#fff';
-                        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                    const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
+                    if (externalAudioDevices.length > 0) {
+                        audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
                     }
+
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            deviceId: targetVideoId,
+                            width: { ideal: selectedProfile.w }, 
+                            height: { ideal: selectedProfile.h }, 
+                            frameRate: { ideal: selectedProfile.fps },
+                            latencyMode: 'low' 
+                        },
+                        audio: audioConstraint
+                    });
+
+                    hiddenVideo.srcObject = stream;
+                    hiddenVideo.onloadedmetadata = () => {
+                        hiddenVideo.play();
+                        startCanvasRender();
+                        
+                        try {
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const source = audioContext.createMediaStreamSource(stream);
+                            source.connect(audioContext.destination);
+                        } catch (audioErr) {
+                            console.error("Audio monitoring setup failed:", audioErr);
+                        }
+                    };
+
+                    controlsWrapper.style.display = 'flex';
+                    if (!isRecording && !blockFadingForNotice) {
+                        hud.style.display = 'block';
+                        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                        hud.style.color = '#fff';
+                    }
+                    allowUIFading = true;
                     resetFadeTimer();
-                }, 5000);
+
+                    if (wasDisconnected && stream) {
+                        wasDisconnected = false;
+                        await new Promise(r => setTimeout(r, 500));
+                        updateOSD(externalVideoDevices[0].label);
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                wasDisconnected = true;
             }
+        } // <--- verifyAndInitCapture closes correctly here
+
+        function updateOSD(deviceLabel) {
+            const videoTrack = stream?.getVideoTracks()[0];
+            if (videoTrack) {
+                const settings = videoTrack.getSettings();
+                triggerTVBanner(
+                    deviceLabel || "USB Capture Card", 
+                    settings.width || 1280, 
+                    settings.height || 720, 
+                    Math.round(settings.frameRate || 60)
+                );
+                return settings;
+            }
+            return null;
         }
-    } catch (err) {
-        console.error("Mode switch rejected by hardware:", err);
-    }
-});
+
+        resSelector.addEventListener('change', async () => {
+            const videoTrack = stream?.getVideoTracks()[0];
+            if (!videoTrack) return;
+
+            clearTimeout(fallbackNoticeTimeout);
+            blockFadingForNotice = false;
+
+            try {
+                const requested = JSON.parse(resSelector.value);
+                
+                await videoTrack.applyConstraints({
+                    width: { ideal: requested.w },
+                    height: { ideal: requested.h },
+                    frameRate: { ideal: requested.fps }
+                });
+                
+                await new Promise(r => setTimeout(r, 250));
+                const trueSettings = updateOSD("Updated Resolution Settings");
+
+                if (trueSettings) {
+                    const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
+                    
+                    if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
+                        blockFadingForNotice = true;
+                        showUI();
+                        
+                        hud.style.display = 'block';
+                        hud.style.color = '#ffaa00';
+                        hud.innerText = `⚠️ Device does not support requested format! Fallback: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
+                        
+                        resSelector.value = JSON.stringify({ w: trueSettings.width, h: trueSettings.height, fps: roundedFrameRate });
+                        
+                        fallbackNoticeTimeout = setTimeout(() => {
+                            blockFadingForNotice = false;
+                            if (!isRecording) {
+                                hud.style.color = '#fff';
+                                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                            }
+                            resetFadeTimer();
+                        }, 5000);
+                    }
+                }
+            } catch (err) {
+                console.error("Mode switch rejected by hardware:", err);
+            }
+        });
+
         function toggleRecording() {
             if (!stream) return;
             clearTimeout(fallbackNoticeTimeout);
@@ -423,22 +431,19 @@ resSelector.addEventListener('change', async () => {
                     hud.classList.add('ui-hidden');
                 });
 
-               
-const options = { 
-    mimeType: 'video/webm;codecs=h264',
-    videoBitsPerSecond: 8000000,
-    audioBitrateMode: 'constant'
-};
+                const options = { 
+                    mimeType: 'video/webm;codecs=h264',
+                    videoBitsPerSecond: 8000000,
+                    audioBitrateMode: 'constant'
+                };
 
-
-if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-    console.warn("H.264 WebM profile unsupported by browser. Falling back to default container.");
-    mediaRecorder = new MediaRecorder(stream);
-} else {
-    mediaRecorder = new MediaRecorder(stream, options);
-}
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    console.warn("H.264 WebM profile unsupported by browser. Falling back to default container.");
+                    mediaRecorder = new MediaRecorder(stream);
+                } else {
+                    mediaRecorder = new MediaRecorder(stream, options);
+                }
                 
-                mediaRecorder = new MediaRecorder(stream, options);
                 mediaRecorder.ondataavailable = (e) => { if (e.data?.size > 0) recordedChunks.push(e.data); };
                 mediaRecorder.onstop = () => {
                     hud.style.color = '#fff';
