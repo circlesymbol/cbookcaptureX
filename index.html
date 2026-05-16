@@ -14,6 +14,7 @@
             overflow: hidden;
             background-color: #000;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
         }
         #v {
             width: 100vw;
@@ -35,31 +36,33 @@
             z-index: 999999;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.1);
-            transition: color 0.2s ease;
         }
         #click-trigger {
             position: fixed;
             bottom: 15px;
             right: 15px;
-            padding: 10px 15px;
-            background: rgba(255, 255, 255, 0.2);
+            padding: 12px 20px;
+            background: #ff3333;
             color: #fff;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             z-index: 999999;
-            font-size: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: background 0.2s ease;
         }
         #click-trigger:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: #e60000;
         }
     </style>
 </head>
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Initializing Capture Stream...</div>
-    <button id="click-trigger">Toggle Record</button>
+    <div id="hud">⏳ Auto-Detecting 60fps Capture Card...</div>
+    <button id="click-trigger">🔴 Record</button>
 
     <script>
         const videoEl = document.getElementById('v');
@@ -72,23 +75,15 @@
         let stream = null;
 
         async function initCapture() {
-            if (stream) return; 
-
-            hud.innerText = "⏳ Scanning for Capture Card...";
-            hud.style.color = '#fff';
+            if (stream) return;
 
             try {
-                // First, ask for generic permission so the browser lets us see device names
-                const initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                
-                // Read the actual hardware list
+                // Step 1: Pop permission request instantly to clear ChromeOS label blocks
+                const initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                
-                // Stop the initial temporary permission stream immediately
-                initialStream.getTracks().forEach(track => track.stop());
+                initStream.getTracks().forEach(track => track.stop()); // Clear initial stream
 
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                let targetDeviceId = null;
 
                 if (videoDevices.length === 0) {
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
@@ -96,25 +91,41 @@
                     return;
                 }
 
-                // Look for an external device by ignoring the built-in webcam labels
-                const externalCard = videoDevices.find(device => {
-                    const label = device.label.toLowerCase();
-                    return !label.includes('internal') && !label.includes('integrated') && !label.includes('front');
-                });
+                let targetDeviceId = null;
 
-                // Use the capture card if found, otherwise default to the first available video source
-                if (externalCard) {
-                    targetDeviceId = externalCard.deviceId;
-                    hud.innerText = `⏳ Connecting to: ${externalCard.label}...`;
-                } else {
-                    targetDeviceId = videoDevices[0].deviceId;
-                    hud.innerText = "⏳ No explicit external card found. Trying default device...";
+                // Step 2: Query the capabilities of each device to find the true 60fps source
+                for (const device of videoDevices) {
+                    try {
+                        const testStream = await navigator.mediaDevices.getUserMedia({
+                            video: { 
+                                deviceId: { exact: device.deviceId },
+                                frameRate: { min: 59 } // Demand high frame rate profiles
+                            }
+                        });
+                        
+                        // If it succeeds without throwing an error, this is our 60fps capture card!
+                        testStream.getTracks().forEach(track => track.stop());
+                        targetDeviceId = device.deviceId;
+                        break; 
+                    } catch (e) {
+                        // If it fails, it's just the 30fps internal webcam. Skip it.
+                        console.log(`Skipping 30fps device: ${device.label}`);
+                    }
                 }
 
-                // Launch the stream using the specific ID of your capture card
+                // If the capability scan fails to find an exact match, fall back to the first non-internal device
+                if (!targetDeviceId) {
+                    const externalCard = videoDevices.find(device => {
+                        const label = device.label.toLowerCase();
+                        return !label.includes('internal') && !label.includes('integrated');
+                    });
+                    targetDeviceId = externalCard ? externalCard.deviceId : videoDevices[0].deviceId;
+                }
+
+                // Step 3: Launch the final target stream with completely unfiltered audio settings
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
-                        deviceId: targetDeviceId ? { exact: targetDeviceId } : undefined,
+                        deviceId: { exact: targetDeviceId },
                         width: { ideal: 1920 }, 
                         height: { ideal: 1080 }, 
                         frameRate: { ideal: 60 } 
@@ -132,7 +143,7 @@
 
             } catch (err) {
                 console.error("Capture failure:", err);
-                hud.innerText = `❌ Connection Error: ${err.name}`;
+                hud.innerText = `❌ Hardware Setup Error: ${err.name}`;
                 hud.style.color = '#ff3333';
             }
         }
@@ -185,9 +196,11 @@
                 isRecording = true;
                 hud.innerText = "⏺️ RECORDING LIVE (Press SPACEBAR to Stop)";
                 hud.style.color = '#ff3333';
+                clickTrigger.innerText = "⏹️ Stop";
             } else {
                 mediaRecorder.stop();
                 isRecording = false;
+                clickTrigger.innerText = "🔴 Record";
             }
         }
 
