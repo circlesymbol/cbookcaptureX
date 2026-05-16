@@ -59,7 +59,7 @@
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Requesting Capture Card Permissions...</div>
+    <div id="hud">⏳ Checking Hardware Connection...</div>
     <button id="click-trigger">Toggle Record</button>
 
     <script>
@@ -72,30 +72,51 @@
         let isRecording = false;
         let stream = null;
 
-        async function initCapture() {
+        // Function to check hardware availability and initialize
+        async function checkAndInitCapture() {
             try {
-                // Request raw 1080p60 video and uncompressed audio
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        width: 1920, 
-                        height: 1080, 
-                        frameRate: { ideal: 60, exact: 60 } 
-                    },
-                    audio: { 
-                        echoCancellation: false, 
-                        noiseSuppression: false, 
-                        autoGainControl: false 
-                    }
-                });
+                // Enumerate devices to see if any camera/capture source exists
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const hasVideoInput = devices.some(device => device.kind === 'videoinput');
 
-                videoEl.srcObject = stream;
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                hud.style.color = '#fff';
+                if (!hasVideoInput) {
+                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
+                    hud.style.color = '#ffaa00';
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                        videoEl.srcObject = null;
+                        stream = null;
+                    }
+                    return;
+                }
+
+                // If a device is found and stream isn't already active, start it
+                if (!stream) {
+                    hud.innerText = "⏳ Requesting Capture Card Permissions...";
+                    hud.style.color = '#fff';
+
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            width: 1920, 
+                            height: 1080, 
+                            frameRate: { ideal: 60, exact: 60 } 
+                        },
+                        audio: { 
+                            echoCancellation: false, 
+                            noiseSuppression: false, 
+                            autoGainControl: false 
+                        }
+                    });
+
+                    videoEl.srcObject = stream;
+                    hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                    hud.style.color = '#fff';
+                }
 
             } catch (err) {
                 hud.innerText = "❌ Error: " + err.name;
                 hud.style.color = '#ff3333';
-                alert("Hardware Constraint/Permission Error: " + err.message);
+                console.error("Hardware initialization failed:", err);
             }
         }
 
@@ -113,7 +134,6 @@
                 try {
                     mediaRecorder = new MediaRecorder(stream, options);
                 } catch (e) {
-                    // Fallback to default if container codecs throw errors
                     mediaRecorder = new MediaRecorder(stream);
                 }
                 
@@ -165,12 +185,15 @@
 
         // Click/Touch Backup Action
         clickTrigger.addEventListener('click', (e) => {
-            e.blur(); // Remove focus so spacebar doesn't trigger it twice
+            e.blur(); 
             toggleRecording();
         });
 
-        // Fire up the feed automatically on page load
-        window.addEventListener('DOMContentLoaded', initCapture);
+        // Auto-detect when devices are plugged in or unplugged live
+        navigator.mediaDevices.addEventListener('devicechange', checkAndInitCapture);
+
+        // Run check on initial page load
+        window.addEventListener('DOMContentLoaded', checkAndInitCapture);
     </script>
 </body>
 </html>
