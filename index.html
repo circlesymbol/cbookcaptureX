@@ -147,19 +147,19 @@
     <div id="hud">⏳ Checking Hardware Connection...</div>
     
     <div id="controls-wrapper" style="display: none;">
-        <select id="res-selector">
-            <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
-            <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
-            <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
-            <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
-            <option value='{"w":1920,"h":1080,"fps":60}'>1080p Full HD @ 60Hz</option>
-            <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
-            <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
-            <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
-            <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
-            <option value='{"w":1280,"h":720,"fps":30}'>720p HD @ 30Hz</option>
-            <option value='{"w":854,"h":480,"fps":60}'>480p ED @ 60Hz</option>
-        </select>
+     <select id="res-selector">
+    <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
+    <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
+    <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
+    <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
+    <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
+    <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
+    <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
+    <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
+    <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
+    <option value='{"w":1280,"h":720,"fps":30}'>720p HD @ 30Hz</option>
+    <option value='{"w":854,"h":480,"fps":60}'>480p ED @ 60Hz</option>
+</select>
         <button id="click-trigger">🔴 Record</button>
     </div>
 
@@ -257,7 +257,7 @@
                     controlsWrapper.style.display = 'none';
                     hud.style.display = 'block';
                     videoEl.srcObject = null;
-                    hud.innerText = "⚠️ No Capture Card Detected!";
+                    hud.innerText = "⚠️ No Capture Card Detected! Please Check USB Connection!";
                     hud.style.color = '#ffaa00';
                     wasDisconnected = true;
                     showUI();
@@ -274,15 +274,17 @@
                         audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
                     }
 
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: { 
-                            deviceId: targetVideoId,
-                            width: { ideal: selectedProfile.w }, 
-                            height: { ideal: selectedProfile.h }, 
-                            frameRate: { ideal: selectedProfile.fps } 
-                        },
-                        audio: audioConstraint
-                    });
+                   const selectedProfile = JSON.parse(resSelector.value);
+
+stream = await navigator.mediaDevices.getUserMedia({
+    video: { 
+        deviceId: targetVideoId, // Removes strict 'exact' wrapping to prevent profile selection crashes
+        width: { ideal: selectedProfile.w }, 
+        height: { ideal: selectedProfile.h }, 
+        frameRate: { ideal: selectedProfile.fps } 
+    },
+    audio: audioConstraint
+});
                     videoEl.srcObject = stream;
                 }
 
