@@ -26,18 +26,16 @@
             position: fixed;
             top: 15px;
             left: 15px;
-            padding: 15px 20px;
-            background: rgba(0, 0, 0, 0.9);
+            padding: 12px 20px;
+            background: rgba(0, 0, 0, 0.85);
             color: #fff;
-            font-size: 13px;
-            font-family: monospace;
+            font-size: 14px;
+            font-weight: 500;
             border-radius: 6px;
+            pointer-events: none;
             z-index: 999999;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            border: 1px solid rgba(255,255,255,0.15);
-            max-width: 90vw;
-            max-height: 40vh;
-            overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.1);
         }
         #click-trigger {
             position: fixed;
@@ -53,65 +51,170 @@
             font-size: 14px;
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: background 0.2s ease;
+        }
+        #click-trigger:hover {
+            background: #e60000;
         }
     </style>
 </head>
 <body>
 
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Running hardware diagnostics...</div>
+    <div id="hud">⏳ Activating Auto-Lock Bootloader...</div>
     <button id="click-trigger">🔴 Record</button>
 
     <script>
         const videoEl = document.getElementById('v');
         const hud = document.getElementById('hud');
+        const clickTrigger = document.getElementById('click-trigger');
         
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
         let stream = null;
 
-        async function initCapture() {
+        // Force a brief delay to let ChromeOS register hardware labels completely
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        async function initCaptureSystem() {
             try {
-                // Request temporary feed to clear security blocks on device names
-                const initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                initStream.getTracks().forEach(track => track.stop());
-
-                let diagnosticLog = "<b>--- HARDWARE DIAGNOSTIC LOG ---</b><br><br>";
+                hud.innerText = "⏳ Opening baseline stream...";
                 
+                // Step 1: Open an initial camera stream to force the permanent browser handshake
+                const initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                videoEl.srcObject = initialStream;
+                
+                hud.innerText = "⏳ Scanning external USB buses...";
+                await delay(800); // Wait 800ms for Chrome to populate hardware strings completely
+
+                // Step 2: Grab the completely unlocked hardware array
+                const devices = await navigator.mediaDevices.enumerateDevices();
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-                // Print all found cameras
-                diagnosticLog += "🎥 <b>VIDEO DEVICES FOUND:</b><br>";
-                videoDevices.forEach((d, i) => {
-                    diagnosticLog += `[${i}] ${d.label || "Hidden Name"}<br>`;
-                    diagnosticLog += `&nbsp;&nbsp;&nbsp;ID: ${d.deviceId.substring(0, 8)}...<br>`;
-                    diagnosticLog += `&nbsp;&nbsp;&nbsp;Group: ${d.groupId.substring(0, 8)}...<br><br>`;
-                });
+                // Kill the temporary baseline webcam stream instantly
+                initialStream.getTracks().forEach(track => track.stop());
+                videoEl.srcObject = null;
 
-                // Print all found audio sources
-                diagnosticLog += "🎙️ <b>AUDIO DEVICES FOUND:</b><br>";
-                audioDevices.forEach((d, i) => {
-                    diagnosticLog += `[${i}] ${d.label || "Hidden Name"}<br>`;
-                    diagnosticLog += `&nbsp;&nbsp;&nbsp;Group: ${d.groupId.substring(0, 8)}...<br><br>`;
-                });
-
-                // Pick first video device to keep page active while troubleshooting
-                if (videoDevices.length > 0) {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: { deviceId: { exact: videoDevices[0].deviceId } },
-                        audio: true
-                    });
-                    videoEl.srcObject = stream;
+                if (videoDevices.length === 0) {
+                    hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
+                    hud.style.color = '#ffaa00';
+                    return;
                 }
 
-                hud.innerHTML = diagnosticLog;
+                // Step 3: Run the blacklist filter over the authentic labels
+                let targetDeviceId = null;
+                const externalCard = videoDevices.find(device => {
+                    const label = device.label.toLowerCase();
+                    return !label.includes('integrated') && 
+                           !label.includes('internal') && 
+                           !label.includes('front') && 
+                           !label.includes('webcam');
+                });
+
+                if (externalCard) {
+                    targetDeviceId = externalCard.deviceId;
+                    console.log(`Target identified: ${externalCard.label}`);
+                } else {
+                    // Fallback to the remaining option if no clear external name matches
+                    targetDeviceId = videoDevices[videoDevices.length - 1].deviceId;
+                }
+
+                hud.innerText = "⏳ Initializing 60fps link...";
+
+                // Step 4: Fire up the real capture stream using the isolated device ID
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        deviceId: { exact: targetDeviceId },
+                        width: { ideal: 1920 }, 
+                        height: { ideal: 1080 }, 
+                        frameRate: { ideal: 60 } 
+                    },
+                    audio: { 
+                        echoCancellation: false, 
+                        noiseSuppression: false, 
+                        autoGainControl: false 
+                    }
+                });
+
+                videoEl.srcObject = stream;
+                
+                const finalName = externalCard ? externalCard.label : "USB Capture Device";
+                hud.innerText = `📺 Live Feed: ${finalName} | [SPACEBAR] to Record`;
+                hud.style.color = '#fff';
 
             } catch (err) {
-                hud.innerText = `❌ Diagnostic failure: ${err.name}\nMake sure browser permissions are allowed!`;
+                console.error("Bootloader crashed:", err);
+                hud.innerText = `❌ Connection Error: ${err.name}`;
+                hud.style.color = '#ff3333';
             }
         }
 
-        window.addEventListener('DOMContentLoaded', initCapture);
+        function toggleRecording() {
+            if (!stream) return;
+
+            if (!isRecording) {
+                recordedChunks = [];
+                let options = { mimeType: 'video/webm;codecs=vp9' };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options = { mimeType: 'video/webm;codecs=vp8' };
+                }
+                
+                try {
+                    mediaRecorder = new MediaRecorder(stream, options);
+                } catch (e) {
+                    mediaRecorder = new MediaRecorder(stream);
+                }
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    hud.innerText = "⏳ Processing Video...";
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `gameplay_1080p60_${Date.now()}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                    }, 150);
+                };
+
+                mediaRecorder.start(100);
+                isRecording = true;
+                hud.innerText = "⏺️ RECORDING LIVE (Press SPACEBAR to Stop)";
+                clickTrigger.innerText = "⏹️ Stop";
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                clickTrigger.innerText = "🔴 Record";
+            }
+        }
+
+        window.onkeydown = (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                toggleRecording();
+            }
+        };
+
+        clickTrigger.addEventListener('click', (e) => {
+            e.blur(); 
+            toggleRecording();
+        });
+
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+            if (!stream) initCaptureSystem();
+        });
+
+        window.addEventListener('DOMContentLoaded', initCaptureSystem);
     </script>
 </body>
 </html>
