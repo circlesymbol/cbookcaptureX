@@ -148,12 +148,12 @@
     
     <div id="controls-wrapper" style="display: none;">
      <select id="res-selector">
-    <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
-    <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
-    <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
-    <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
     <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
     <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
+    <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
+    <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
+    <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
+    <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
     <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
     <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
     <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
@@ -339,7 +339,7 @@
                 });
                 
                 await new Promise(r => setTimeout(r, 250));
-                const trueSettings = updateOSD("Format Configuration Shifted");
+                const trueSettings = updateOSD("Updated Resolution");
 
                 if (trueSettings) {
                     const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
@@ -350,7 +350,7 @@
                         
                         hud.style.display = 'block';
                         hud.style.color = '#ffaa00';
-                        hud.innerText = `⚠️ Device does not support requested format! Fallback: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
+                        hud.innerText = `⚠️ Device does not support requested format! Currently Displaying: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
                         
                         fallbackNoticeTimeout = setTimeout(() => {
                             blockFadingForNotice = false;
