@@ -109,32 +109,43 @@
                     return;
                 }
 
-                // Step 3: Filter for external capture audio hardware
+                // Step 3: Audio Exclusion Filter. Toss out any internal Chromebook mics.
                 const externalAudioDevices = audioDevices.filter(device => {
                     const label = device.label.toLowerCase();
                     return !label.includes('internal') && 
                            !label.includes('integrated') && 
-                           !label.includes('mic') && 
-                           (label.includes('usb') || label.includes('capture') || label.includes('digital'));
+                           !label.includes('built-in') &&
+                           !label.includes('default');
                 });
 
                 // Step 4: Spin up the dual-channel stream using exact target device IDs
                 if (!stream) {
                     const targetVideoId = externalVideoDevices[0].deviceId;
                     
-                    // Fall back to default audio if no specific external USB mic identifier is found
-                    const audioConstraint = externalAudioDevices.length > 0 
-                        ? { 
+                    // Assign audio based on our exclusion filter results
+                    let audioConstraint;
+                    if (externalAudioDevices.length > 0) {
+                        audioConstraint = { 
                             deviceId: { exact: externalAudioDevices[0].deviceId },
                             echoCancellation: false, 
                             noiseSuppression: false, 
                             autoGainControl: false 
-                          }
-                        : { 
+                        };
+                    } else if (audioDevices.length > 0) {
+                        // Fallback fallback: If everything was filtered out, pick the very last audio interface listed (usually the plug-in USB)
+                        audioConstraint = { 
+                            deviceId: { exact: audioDevices[audioDevices.length - 1].deviceId },
                             echoCancellation: false, 
                             noiseSuppression: false, 
                             autoGainControl: false 
-                          };
+                        };
+                    } else {
+                        audioConstraint = { 
+                            echoCancellation: false, 
+                            noiseSuppression: false, 
+                            autoGainControl: false 
+                        };
+                    }
 
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: { 
