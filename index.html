@@ -276,15 +276,16 @@ let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGa
         audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
     }
 
-    stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-            deviceId: targetVideoId,
-            width: { ideal: selectedProfile.w }, 
-            height: { ideal: selectedProfile.h }, 
-            frameRate: { ideal: selectedProfile.fps } 
-        },
-        audio: audioConstraint
-    });
+stream = await navigator.mediaDevices.getUserMedia({
+    video: { 
+        deviceId: targetVideoId,
+        width: { ideal: selectedProfile.w }, 
+        height: { ideal: selectedProfile.h }, 
+        frameRate: { ideal: selectedProfile.fps },
+        latencyMode: 'low' 
+    },
+    audio: audioConstraint
+});
     videoEl.srcObject = stream;
 }
 
