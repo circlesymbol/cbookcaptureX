@@ -76,14 +76,14 @@
 
         async function verifyAndInitCapture() {
             try {
-                // Step 1: Request AUDIO ONLY. This unlocks device labels without activating the webcam.
+                // Step 1: Request audio permission to safely unlock system device labels
                 const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                permStream.getTracks().forEach(track => track.stop()); // Instantly clean up audio track
+                permStream.getTracks().forEach(track => track.stop()); // Instantly release testing track
 
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
 
-                // Step 2: Filter the camera list for authentic external hardware
+                // Step 2: Look for authentic external capture hardware labels
                 const externalDevices = videoDevices.filter(device => {
                     const label = device.label.toLowerCase();
                     return !label.includes('integrated') && 
@@ -92,19 +92,24 @@
                            !label.includes('webcam');
                 });
 
-                // STRICT HALT: If no capture card label is found, drop everything and show the error
+                // UNPLUGGED / DISCONNECTED PROTECTION
                 if (externalDevices.length === 0) {
+                    // If a stream was active, kill it completely right now
                     if (stream) {
                         stream.getTracks().forEach(track => track.stop());
-                        videoEl.srcObject = null;
                         stream = null;
                     }
+                    if (isRecording) {
+                        isRecording = false;
+                        clickTrigger.innerText = "🔴 Record";
+                    }
+                    videoEl.srcObject = null;
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                     hud.style.color = '#ffaa00';
                     return;
                 }
 
-                // Step 3: Spin up the actual 60fps video capture loop using the external ID
+                // Step 3: Spin up the actual 60fps link if it isn't running yet
                 if (!stream) {
                     const targetDeviceId = externalDevices[0].deviceId;
                     
@@ -128,7 +133,13 @@
                 }
 
             } catch (err) {
-                console.error("Hardware verification failed:", err);
+                console.error("Hardware filter check failed:", err);
+                // If anything crashes during parsing, make sure old stream assets are scrubbed
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
+                videoEl.srcObject = null;
                 hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                 hud.style.color = '#ffaa00';
             }
@@ -167,7 +178,10 @@
                     setTimeout(() => {
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
-                        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                        // Only reset text to record prompt if stream wasn't destroyed while recording
+                        if (stream) {
+                            hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                        }
                     }, 150);
                 };
 
@@ -194,6 +208,7 @@
             toggleRecording();
         });
 
+        // The listener that catches when hardware is added or removed dynamically
         navigator.mediaDevices.addEventListener('devicechange', verifyAndInitCapture);
         window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
     </script>
