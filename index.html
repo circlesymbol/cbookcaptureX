@@ -19,7 +19,7 @@
         #v {
             width: 100vw;
             height: 100vh;
-            object-fit: fill; /* FIXED: Stretches the incoming feed to completely mask the background canvas */
+            object-fit: contain;
             display: block;
         }
         
@@ -337,6 +337,7 @@
                 recordedChunks = [];
                 recordingSeconds = 0;
 
+                // FORCE REPAINT IMMEDATELY: Change button interface properties before touching recording initialization
                 requestAnimationFrame(() => {
                     clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
                     hud.classList.add('ui-hidden');
