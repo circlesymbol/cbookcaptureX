@@ -76,14 +76,14 @@
 
         async function verifyAndInitCapture() {
             try {
-                // Step 1: Request permission to unlock the real hardware labels
-                const permStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                // Step 1: Request AUDIO ONLY. This unlocks device labels without activating the webcam.
+                const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                permStream.getTracks().forEach(track => track.stop()); // Instantly stop testing
+                permStream.getTracks().forEach(track => track.stop()); // Instantly clean up audio track
 
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
 
-                // Step 2: Find external devices by dropping internal webcam identifiers
+                // Step 2: Filter the camera list for authentic external hardware
                 const externalDevices = videoDevices.filter(device => {
                     const label = device.label.toLowerCase();
                     return !label.includes('integrated') && 
@@ -92,7 +92,7 @@
                            !label.includes('webcam');
                 });
 
-                // STOPS EXECUTING IF NO CAPTURE CARD IS PRESENT
+                // STRICT HALT: If no capture card label is found, drop everything and show the error
                 if (externalDevices.length === 0) {
                     if (stream) {
                         stream.getTracks().forEach(track => track.stop());
@@ -104,7 +104,7 @@
                     return;
                 }
 
-                // Step 3: If an external card exists, lock onto it and start the 60fps feed
+                // Step 3: Spin up the actual 60fps video capture loop using the external ID
                 if (!stream) {
                     const targetDeviceId = externalDevices[0].deviceId;
                     
@@ -128,9 +128,9 @@
                 }
 
             } catch (err) {
-                console.error("Hardware filter check failed:", err);
-                hud.innerText = `❌ Connection Error: ${err.name}`;
-                hud.style.color = '#ff3333';
+                console.error("Hardware verification failed:", err);
+                hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
+                hud.style.color = '#ffaa00';
             }
         }
 
@@ -194,7 +194,6 @@
             toggleRecording();
         });
 
-        // Live plug/unplug system tracking
         navigator.mediaDevices.addEventListener('devicechange', verifyAndInitCapture);
         window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
     </script>
