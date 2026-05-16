@@ -72,13 +72,13 @@
         let stream = null;
 
         async function initCapture() {
-            if (stream) return; // Stream is already running smoothly
+            if (stream) return; 
 
             hud.innerText = "⏳ Requesting Capture Card Permissions...";
             hud.style.color = '#fff';
 
             try {
-                // Request stream using 'ideal' parameters first to avoid OverconstrainedError crashes
+                // Request stream using ideal parameters to avoid immediate overconstrained blocks
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
                         width: { ideal: 1920 }, 
@@ -102,23 +102,28 @@
             }
         }
 
-        // Dedicated error analyzer to check hardware status when things fail
+        // Dedicated error analyzer - no alert popups allowed
         async function handleCaptureError(err) {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const hasVideoInput = devices.some(device => device.kind === 'videoinput');
 
+                // If no camera hardware profile is reported by ChromeOS
                 if (!hasVideoInput) {
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                     hud.style.color = '#ffaa00';
-                } else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
-                    hud.innerText = "⚠️ Hardware Constraint Warning: Attempting fallback resolution...";
+                } 
+                // Handles the OverconstrainedError directly in the HUD text
+                else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+                    hud.innerText = "⚠️ OverconstrainedError: Hardware is restricted. Trying fallback resolution...";
                     hud.style.color = '#ffaa00';
                     attemptFallbackCapture();
-                } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                    hud.innerText = "❌ Blocked: Please allow camera/mic access in browser bar.";
+                } 
+                else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    hud.innerText = "❌ Blocked: Please allow camera/mic access in the browser address bar.";
                     hud.style.color = '#ff3333';
-                } else {
+                } 
+                else {
                     hud.innerText = `❌ Connection Error: ${err.name}`;
                     hud.style.color = '#ff3333';
                 }
@@ -128,18 +133,17 @@
             }
         }
 
-        // Fallback option if the card absolutely refuses the requested 1080p60 container structure
         async function attemptFallbackCapture() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: true, // Pulls the card's native default resolution structure
+                    video: true, 
                     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
                 });
                 videoEl.srcObject = stream;
-                hud.innerText = "🔴 Running (Fallback Resolution) - Press [SPACEBAR] to Record";
+                hud.innerText = "🔴 Running (Fallback Mode) - Press [SPACEBAR] to Record";
                 hud.style.color = '#fff';
             } catch (fallbackErr) {
-                hud.innerText = "❌ Capture Card format incompatible.";
+                hud.innerText = "❌ Capture Card format entirely incompatible.";
                 hud.style.color = '#ff3333';
             }
         }
@@ -210,7 +214,6 @@
             toggleRecording();
         });
 
-        // If you plug it in live, reset and run the checks again
         navigator.mediaDevices.addEventListener('devicechange', () => {
             if (!stream) initCapture();
         });
