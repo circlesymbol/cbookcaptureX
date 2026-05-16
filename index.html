@@ -188,11 +188,8 @@
         let wasDisconnected = true;
         let allowUIFading = false;
 
-        // Baseline standard configurations we want to present if the hardware matches
+        // Clean Menu Profiles List
         const resolutionTargets = [
-            { label: "4K UHD (2160p @ 60)", w: 3840, h: 2160, fps: 60 },
-            { label: "4K UHD (2160p @ 30)", w: 3840, h: 2160, fps: 30 },
-            { label: "1440p QHD (@ 60)", w: 2560, h: 1440, fps: 60 },
             { label: "1080p FHD (@ 60)", w: 1920, h: 1080, fps: 60 },
             { label: "1080p FHD (@ 30)", w: 1920, h: 1080, fps: 30 },
             { label: "720p HD (@ 60)", w: 1280, h: 720, fps: 60 },
@@ -244,49 +241,21 @@
             return `${hrs}:${mins}:${secs}`;
         }
 
-        // REBUILT: Populates options using native track capability limits safely without stream-spamming
-        function populateResolutionMenu(videoTrack) {
-            const currentSelection = resSelector.value;
+        // SAFE BUILD: Populates the menu directly without querying broken hardware capabilities properties
+        function buildResolutionMenu() {
+            if (resSelector.children.length > 0) return; // Already built
+            
             resSelector.innerHTML = "";
-            
-            // Query track capabilities exposed by the browser driver handle
-            const capabilities = (typeof videoTrack.getCapabilities === 'function') ? videoTrack.getCapabilities() : {};
-            
-            const maxW = capabilities.width?.max || 1920;
-            const maxH = capabilities.height?.max || 1080;
-            const maxFPS = capabilities.frameRate?.max || 60;
-
-            let addedOptionsCount = 0;
-
-            for (const target of resolutionTargets) {
-                // If hardware handles the dimensions, display it as a native selectable dropdown format
-                if (target.w <= maxW && target.h <= maxH) {
-                    const opt = document.createElement('option');
-                    // Cap frame rate dynamically if browser flags a hard max threshold lower than target profile
-                    const finalFPS = Math.min(target.fps, Math.round(maxFPS));
-                    const adjustedProfile = { w: target.w, h: target.h, fps: finalFPS };
-                    
-                    opt.value = JSON.stringify(adjustedProfile);
-                    opt.textContent = target.label;
-                    resSelector.appendChild(opt);
-                    addedOptionsCount++;
-                }
-            }
-
-            if (addedOptionsCount === 0) {
-                const fallbackOpt = document.createElement('option');
-                fallbackOpt.value = JSON.stringify({ w: 1920, h: 1080, fps: 60 });
-                fallbackOpt.textContent = "1080p FHD (@ 60)";
-                resSelector.appendChild(fallbackOpt);
-            } else if (currentSelection) {
-                // Keep choice values persistent across runtime checks
-                resSelector.value = currentSelection;
-            }
+            resolutionTargets.forEach(target => {
+                const opt = document.createElement('option');
+                opt.value = JSON.stringify({ w: target.w, h: target.h, fps: target.fps });
+                opt.textContent = target.label;
+                resSelector.appendChild(opt);
+            });
         }
 
         async function verifyAndInitCapture() {
             try {
-                // Request a base permissions context setup
                 const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 permStream.getTracks().forEach(track => track.stop());
@@ -338,7 +307,12 @@
 
                 const targetVideoId = externalVideoDevices[0].deviceId;
 
-                // Fire up a single baseline initialization stream layout to extract device profiles
+                // Build menu statically and safely
+                buildResolutionMenu();
+
+                // Pull value safely from menu selection configuration
+                const selectedProfile = JSON.parse(resSelector.value || '{"w":1920,"h":1080,"fps":60}');
+
                 if (!stream) {
                     let audioConstraint;
                     if (externalAudioDevices.length > 0) {
@@ -363,24 +337,17 @@
                         };
                     }
 
-                    // Request unconstrained high ranges to safely probe cap boundaries natively
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: { 
                             deviceId: { exact: targetVideoId },
-                            width: { ideal: 3840 }, 
-                            height: { ideal: 2160 }, 
-                            frameRate: { ideal: 60 } 
+                            width: { ideal: selectedProfile.w }, 
+                            height: { ideal: selectedProfile.h }, 
+                            frameRate: { ideal: selectedProfile.fps } 
                         },
                         audio: audioConstraint
                     });
 
                     videoEl.srcObject = stream;
-
-                    // Instantly build out our select menu options safely using our new track lookups
-                    const videoTrack = stream.getVideoTracks()[0];
-                    if (videoTrack) {
-                        populateResolutionMenu(videoTrack);
-                    }
                 }
 
                 controlsWrapper.style.display = 'flex';
@@ -406,15 +373,15 @@
 
                         triggerTVBanner(
                             rawName, 
-                            settings.width || 1920, 
-                            settings.height || 1080, 
-                            Math.round(settings.frameRate || 60)
+                            settings.width || selectedProfile.w, 
+                            settings.height || selectedProfile.h, 
+                            Math.round(settings.frameRate || selectedProfile.fps)
                         );
                     }
                 }
 
             } catch (err) {
-                console.error("Hardware pipeline failed:", err);
+                console.error("Hardware pipeline initiation failed:", err);
                 allowUIFading = false;
                 clearTimeout(fadeTimeout);
                 clearInterval(recordingInterval);
@@ -434,7 +401,7 @@
             }
         }
 
-        // DYNAMIC CONSTRAINTS CHANGE: Changes tracks on the fly safely without crashing stream threads
+        // Dynamically alter track profiles cleanly on modification change events
         resSelector.addEventListener('change', async () => {
             const videoTrack = stream?.getVideoTracks()[0];
             if (!videoTrack) return;
@@ -442,11 +409,10 @@
             try {
                 const targetProfile = JSON.parse(resSelector.value);
                 
-                // Dynamically realign constraints without spinning down stream handles completely
                 await videoTrack.applyConstraints({
-                    width: { exact: targetProfile.w },
-                    height: { exact: targetProfile.h },
-                    frameRate: { exact: targetProfile.fps }
+                    width: { ideal: targetProfile.w },
+                    height: { ideal: targetProfile.h },
+                    frameRate: { ideal: targetProfile.fps }
                 });
 
                 const settings = videoTrack.getSettings();
@@ -457,7 +423,7 @@
                     Math.round(settings.frameRate || targetProfile.fps)
                 );
             } catch (err) {
-                console.error("Dynamic resolution shift failed:", err);
+                console.error("Format configuration switch failed:", err);
             }
         });
 
