@@ -46,7 +46,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
 
-        /* Wrapper to keep interactive tools unified at the bottom right */
+        /* Unified Bottom-Right Control Panel */
         #controls-wrapper {
             bottom: 15px;
             right: 15px;
@@ -188,7 +188,7 @@
         let wasDisconnected = true;
         let allowUIFading = false;
 
-        // Hardware Negotiation Profiles Matrix Array for active baseline testing
+        // Baseline standard configurations we want to present if the hardware matches
         const resolutionTargets = [
             { label: "4K UHD (2160p @ 60)", w: 3840, h: 2160, fps: 60 },
             { label: "4K UHD (2160p @ 30)", w: 3840, h: 2160, fps: 30 },
@@ -244,67 +244,49 @@
             return `${hrs}:${mins}:${secs}`;
         }
 
-        // DISCOVERY ENGINE: Uses relaxed ideal criteria to pull MJPEG high-res modes
-        async function discoverHardwareCapabilities(deviceId) {
+        // REBUILT: Populates options using native track capability limits safely without stream-spamming
+        function populateResolutionMenu(videoTrack) {
             const currentSelection = resSelector.value;
-            resSelector.innerHTML = ""; 
-            let baselineMatches = 0;
-            const seenModes = new Set();
+            resSelector.innerHTML = "";
+            
+            // Query track capabilities exposed by the browser driver handle
+            const capabilities = (typeof videoTrack.getCapabilities === 'function') ? videoTrack.getCapabilities() : {};
+            
+            const maxW = capabilities.width?.max || 1920;
+            const maxH = capabilities.height?.max || 1080;
+            const maxFPS = capabilities.frameRate?.max || 60;
 
-            for (const profile of resolutionTargets) {
-                try {
-                    const testStream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            deviceId: { exact: deviceId },
-                            width: { ideal: profile.w },
-                            height: { ideal: profile.h },
-                            frameRate: { ideal: profile.fps }
-                        }
-                    });
+            let addedOptionsCount = 0;
 
-                    const track = testStream.getTracks()[0];
-                    if (track) {
-                        const settings = track.getSettings();
-                        const actualW = settings.width;
-                        const actualH = settings.height;
-                        const actualFPS = Math.round(settings.frameRate || profile.fps);
-                        
-                        const modeKey = `${actualW}x${actualH}@${actualFPS}`;
-
-                        if (!seenModes.has(modeKey)) {
-                            seenModes.add(modeKey);
-                            
-                            const opt = document.createElement('option');
-                            const actualProfile = { w: actualW, h: actualH, fps: actualFPS };
-                            opt.value = JSON.stringify(actualProfile);
-                            
-                            if (actualW >= 3840) opt.textContent = `4K UHD (${actualH}p @ ${actualFPS}Hz)`;
-                            else if (actualW >= 2560) opt.textContent = `1440p QHD (${actualH}p @ ${actualFPS}Hz)`;
-                            else if (actualW >= 1920) opt.textContent = `1080p FHD (${actualH}p @ ${actualFPS}Hz)`;
-                            else opt.textContent = `${actualH}p HD (${actualW}x${actualH} @ ${actualFPS}Hz)`;
-                            
-                            resSelector.appendChild(opt);
-                            baselineMatches++;
-                        }
-                    }
-                    testStream.getTracks().forEach(t => t.stop());
-                } catch (e) {
-                    console.warn(`Profile ${profile.w}x${profile.h} skipped during negotiation.`);
+            for (const target of resolutionTargets) {
+                // If hardware handles the dimensions, display it as a native selectable dropdown format
+                if (target.w <= maxW && target.h <= maxH) {
+                    const opt = document.createElement('option');
+                    // Cap frame rate dynamically if browser flags a hard max threshold lower than target profile
+                    const finalFPS = Math.min(target.fps, Math.round(maxFPS));
+                    const adjustedProfile = { w: target.w, h: target.h, fps: finalFPS };
+                    
+                    opt.value = JSON.stringify(adjustedProfile);
+                    opt.textContent = target.label;
+                    resSelector.appendChild(opt);
+                    addedOptionsCount++;
                 }
             }
 
-            if (baselineMatches === 0) {
+            if (addedOptionsCount === 0) {
                 const fallbackOpt = document.createElement('option');
                 fallbackOpt.value = JSON.stringify({ w: 1920, h: 1080, fps: 60 });
-                fallbackOpt.textContent = "Auto Match (1080p60 Default)";
+                fallbackOpt.textContent = "1080p FHD (@ 60)";
                 resSelector.appendChild(fallbackOpt);
             } else if (currentSelection) {
+                // Keep choice values persistent across runtime checks
                 resSelector.value = currentSelection;
             }
         }
 
         async function verifyAndInitCapture() {
             try {
+                // Request a base permissions context setup
                 const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 permStream.getTracks().forEach(track => track.stop());
@@ -356,13 +338,7 @@
 
                 const targetVideoId = externalVideoDevices[0].deviceId;
 
-                if (wasDisconnected || resSelector.children.length === 0) {
-                    hud.innerText = "🔍 Profiling Capture Card Capabilities...";
-                    await discoverHardwareCapabilities(targetVideoId);
-                }
-
-                const selectedProfile = JSON.parse(resSelector.value || '{"w":1920,"h":1080,"fps":60}');
-
+                // Fire up a single baseline initialization stream layout to extract device profiles
                 if (!stream) {
                     let audioConstraint;
                     if (externalAudioDevices.length > 0) {
@@ -387,17 +363,24 @@
                         };
                     }
 
+                    // Request unconstrained high ranges to safely probe cap boundaries natively
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: { 
                             deviceId: { exact: targetVideoId },
-                            width: { exact: selectedProfile.w }, 
-                            height: { exact: selectedProfile.h }, 
-                            frameRate: { exact: selectedProfile.fps } 
+                            width: { ideal: 3840 }, 
+                            height: { ideal: 2160 }, 
+                            frameRate: { ideal: 60 } 
                         },
                         audio: audioConstraint
                     });
 
                     videoEl.srcObject = stream;
+
+                    // Instantly build out our select menu options safely using our new track lookups
+                    const videoTrack = stream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        populateResolutionMenu(videoTrack);
+                    }
                 }
 
                 controlsWrapper.style.display = 'flex';
@@ -423,15 +406,15 @@
 
                         triggerTVBanner(
                             rawName, 
-                            settings.width || selectedProfile.w, 
-                            settings.height || selectedProfile.h, 
-                            Math.round(settings.frameRate || selectedProfile.fps)
+                            settings.width || 1920, 
+                            settings.height || 1080, 
+                            Math.round(settings.frameRate || 60)
                         );
                     }
                 }
 
             } catch (err) {
-                console.error("Hardware filter check failed:", err);
+                console.error("Hardware pipeline failed:", err);
                 allowUIFading = false;
                 clearTimeout(fadeTimeout);
                 clearInterval(recordingInterval);
@@ -451,12 +434,31 @@
             }
         }
 
-        resSelector.addEventListener('change', () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
+        // DYNAMIC CONSTRAINTS CHANGE: Changes tracks on the fly safely without crashing stream threads
+        resSelector.addEventListener('change', async () => {
+            const videoTrack = stream?.getVideoTracks()[0];
+            if (!videoTrack) return;
+
+            try {
+                const targetProfile = JSON.parse(resSelector.value);
+                
+                // Dynamically realign constraints without spinning down stream handles completely
+                await videoTrack.applyConstraints({
+                    width: { exact: targetProfile.w },
+                    height: { exact: targetProfile.h },
+                    frameRate: { exact: targetProfile.fps }
+                });
+
+                const settings = videoTrack.getSettings();
+                triggerTVBanner(
+                    "Format Updated", 
+                    settings.width || targetProfile.w, 
+                    settings.height || targetProfile.h, 
+                    Math.round(settings.frameRate || targetProfile.fps)
+                );
+            } catch (err) {
+                console.error("Dynamic resolution shift failed:", err);
             }
-            verifyAndInitCapture();
         });
 
         function toggleRecording() {
@@ -467,7 +469,6 @@
                 recordedChunks = [];
                 recordingSeconds = 0;
 
-                // Repaint UI layout components before initializing blocking stream operations
                 requestAnimationFrame(() => {
                     clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
                     resSelector.style.display = 'none'; 
@@ -524,4 +525,58 @@
                 clearInterval(recordingInterval);
                 recordingInterval = setInterval(() => {
                     recordingSeconds++;
-                    clickTrigger.innerText = `⏹
+                    clickTrigger.innerText = `⏹️ Stop [${formatTimeString(recordingSeconds)}]`;
+                }, 1000);
+
+                resetFadeTimer();
+            } else {
+                clearInterval(recordingInterval);
+                mediaRecorder.stop();
+                isRecording = false;
+                
+                clickTrigger.innerText = "🔴 Record";
+                resetFadeTimer();
+            }
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            const deltaX = Math.abs(e.clientX - lastX);
+            const deltaY = Math.abs(e.clientY - lastY);
+            if (deltaX > movementThreshold || deltaY > movementThreshold) {
+                resetFadeTimer();
+            }
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        window.addEventListener('touchstart', resetFadeTimer);
+
+        window.onkeydown = (e) => {
+            if (controlsWrapper.style.display === 'none') return;
+
+            if (e.code === 'Space') {
+                e.preventDefault();
+                toggleRecording();
+            } else {
+                resetFadeTimer();
+            }
+        };
+
+        clickTrigger.addEventListener('click', (e) => {
+            e.blur(); 
+            toggleRecording();
+        });
+
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+            resSelector.innerHTML = "";
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            verifyAndInitCapture();
+        });
+        
+        window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
+    </script>
+</body>
+</html>
