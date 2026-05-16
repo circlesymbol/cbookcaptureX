@@ -274,7 +274,7 @@
     const targetVideoId = externalVideoDevices[0].deviceId;
     const selectedProfile = JSON.parse(resSelector.value);
 
-let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 };
+let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0, channelCount: 2 };
 
     const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
     if (externalAudioDevices.length > 0) {
@@ -396,7 +396,8 @@ stream = await navigator.mediaDevices.getUserMedia({
                
 const options = { 
     mimeType: 'video/webm;codecs=h264',
-    videoBitsPerSecond: 8000000
+    videoBitsPerSecond: 8000000,
+    audioBitrateMode: 'constant'
 };
 
 
