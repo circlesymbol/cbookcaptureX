@@ -58,6 +58,7 @@
             font-size: 14px;
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            display: block; /* Managed dynamically by JS now */
         }
         #click-trigger:hover {
             background: #e60000;
@@ -144,15 +145,12 @@
         const movementThreshold = 10;
         
         let wasDisconnected = true;
-        
-        // NEW STATE GUARDIAN: Hard lock that controls whether elements can fade
         let allowUIFading = false;
 
         function resetFadeTimer() {
             showUI();
             clearTimeout(fadeTimeout);
             
-            // Absolute check against our explicit state rule
             if (allowUIFading) {
                 fadeTimeout = setTimeout(hideUI, 3000);
             }
@@ -160,7 +158,10 @@
 
         function showUI() {
             hud.classList.remove('ui-hidden');
-            clickTrigger.classList.remove('ui-hidden');
+            // Only toggle opacity/visibility state if it's currently allowed to be drawn layout-wise
+            if (clickTrigger.style.display !== 'none') {
+                clickTrigger.classList.remove('ui-hidden');
+            }
             document.body.classList.remove('hide-cursor');
         }
 
@@ -201,7 +202,6 @@
                 });
 
                 if (externalVideoDevices.length === 0) {
-                    // KILL TIMERS IMMEDIATELY
                     allowUIFading = false; 
                     clearTimeout(fadeTimeout);
                     
@@ -213,12 +213,16 @@
                         isRecording = false;
                         clickTrigger.innerText = "🔴 Record";
                     }
+                    
+                    // NEW HIDE RULE: Erase button layout entirely during an active drop alert state
+                    clickTrigger.style.display = 'none'; 
+                    
                     videoEl.srcObject = null;
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                     hud.style.color = '#ffaa00';
                     tvBanner.classList.remove('banner-active'); 
                     wasDisconnected = true;
-                    showUI(); // Force layout wide awake
+                    showUI(); 
                     return;
                 }
 
@@ -269,10 +273,12 @@
                     videoEl.srcObject = stream;
                 }
 
+                // NEW SHOW RULE: Instantly revive record option button once valid streams clear safely
+                clickTrigger.style.display = 'block';
+
                 hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
                 hud.style.color = '#fff';
                 
-                // UNLOCK FADING ONLY NOW: Feed is safe and verified
                 allowUIFading = true;
                 resetFadeTimer();
 
@@ -299,6 +305,10 @@
                 console.error("Hardware filter check failed:", err);
                 allowUIFading = false;
                 clearTimeout(fadeTimeout);
+                
+                // Keep layout clear during severe execution errors
+                clickTrigger.style.display = 'none';
+                
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                     stream = null;
@@ -379,6 +389,9 @@
         window.addEventListener('touchstart', resetFadeTimer);
 
         window.onkeydown = (e) => {
+            // Drop key listeners if the device is unlinked to avoid empty files mapping
+            if (clickTrigger.style.display === 'none') return;
+
             if (e.code === 'Space') {
                 e.preventDefault();
                 toggleRecording();
