@@ -339,7 +339,7 @@
                 });
                 
                 await new Promise(r => setTimeout(r, 250));
-                const trueSettings = updateOSD("Updated Resolution");
+                const trueSettings = updateOSD("Updated Resolution Settings");
 
                 if (trueSettings) {
                     const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
