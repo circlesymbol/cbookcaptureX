@@ -269,7 +269,8 @@
     const targetVideoId = externalVideoDevices[0].deviceId;
     const selectedProfile = JSON.parse(resSelector.value);
 
-    let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 };
+
     const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
     if (externalAudioDevices.length > 0) {
         audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
