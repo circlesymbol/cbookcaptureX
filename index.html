@@ -142,6 +142,9 @@
         let lastX = 0;
         let lastY = 0;
         const movementThreshold = 10;
+        
+        // Flag to tracking connection states cleanly
+        let wasDisconnected = true;
 
         function resetFadeTimer() {
             showUI();
@@ -206,6 +209,7 @@
                     hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                     hud.style.color = '#ffaa00';
                     tvBanner.classList.remove('banner-active'); 
+                    wasDisconnected = true; // Arm the flag for when it gets reconnected
                     showUI();
                     return;
                 }
@@ -218,6 +222,7 @@
                            !label.includes('default');
                 });
 
+                // Force creation if stream doesn't exist
                 if (!stream) {
                     const targetVideoId = externalVideoDevices[0].deviceId;
                     
@@ -255,13 +260,20 @@
                     });
 
                     videoEl.srcObject = stream;
-                    hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                    hud.style.color = '#fff';
-                    
-                    resetFadeTimer();
+                }
 
-                    // NEW: Wait 500ms for ChromeOS to populate hardware track metadata settings properly
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                // CONSTANT ASSURANCE SYSTEM: Update general layout parameters safely
+                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                hud.style.color = '#fff';
+                resetFadeTimer();
+
+                // BANNER FORCED TRIGGER ENGINE
+                // If a device is present and we were previously unlinked, pop up the OSD banner immediately!
+                if (wasDisconnected && stream) {
+                    wasDisconnected = false; 
+                    
+                    // Stabilize metadata reading pipelines
+                    await new Promise(resolve => setTimeout(resolve, 400));
 
                     const videoTrack = stream.getVideoTracks()[0];
                     if (videoTrack) {
@@ -286,6 +298,7 @@
                 videoEl.srcObject = null;
                 hud.innerText = "⚠️ No Capture Card Detected! Check your USB connection.";
                 hud.style.color = '#ffaa00';
+                wasDisconnected = true;
                 showUI();
             }
         }
