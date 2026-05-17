@@ -27,9 +27,6 @@
         #hud, #controls-wrapper {
             position: fixed;
             z-index: 999999;
-            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
-            opacity: 1;
-            visibility: visible;
         }
 
         #hud {
@@ -44,6 +41,7 @@
             pointer-events: none;
             border: 1px solid rgba(255,255,255,0.1);
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
         }
 
         #controls-wrapper {
@@ -52,8 +50,6 @@
             display: flex;
             gap: 10px;
             align-items: center;
-            /* Transition added to wrapper to handle sub-element fading gracefully */
-            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
         }
 
         #res-selector {
@@ -176,7 +172,7 @@
             font-size: 18px;
             font-weight: bold;
             margin-bottom: 12px;
-            color: #ffaa00;
+            color: #fff;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -242,11 +238,11 @@
 
     <div id="modal-overlay">
         <div id="modal-box">
-            <div id="modal-title">ℹ️ Local Capture Format Note</div>
+            <div id="modal-title">Format Notice</div>
             <div id="modal-text">
-                Your high bit-rate gameplay footage has been saved directly as a raw <strong>.webm</strong> file to preserve performance and prevent dropped frames. 
+                This capture has been saved directly as a raw .webm file to preserve performance.
                 <br><br>
-                You may need to pass it through a media converter to transcode it into an <strong>.mp4</strong> if your editing layout or playback software requires it!
+                You may need to convert it into an .mp4 for the file to be compatible with other software.
             </div>
             <button id="modal-btn">Got it, Download File</button>
         </div>
@@ -288,7 +284,6 @@
         let blockFadingForNotice = false;
         let pendingDownloadFn = null;
         
-        // FIX: Flag to catch the exact moment recording starts and preserve button visibility
         let isStartingRecording = false;
 
         function resetFadeTimer() {
@@ -302,26 +297,22 @@
 
         function showUI() {
             hud.classList.remove('ui-hidden');
-            controlsWrapper.classList.remove('ui-hidden');
             resSelector.classList.remove('ui-hidden');
             clickTrigger.classList.remove('ui-hidden');
             document.body.classList.remove('hide-cursor');
         }
 
         function hideUI() {
-            hud.classList.add('ui-hidden');
-            
-            // FIX: If we just started recording, keep the record button visible but fade everything else out
             if (isStartingRecording) {
                 hud.classList.add('ui-hidden');
                 resSelector.classList.add('ui-hidden');
-                // Make sure wrapper doesn't vanish so the button stays drawn
-                controlsWrapper.classList.remove('ui-hidden');
-                document.body.classList.add('hide-cursor');
+                clickTrigger.classList.remove('ui-hidden');
             } else {
-                controlsWrapper.classList.add('ui-hidden');
-                document.body.classList.add('hide-cursor');
+                hud.classList.add('ui-hidden');
+                resSelector.classList.add('ui-hidden');
+                clickTrigger.classList.add('ui-hidden');
             }
+            document.body.classList.add('hide-cursor');
         }
 
         function triggerTVBanner(rawDeviceName, width, height, fps) {
@@ -515,19 +506,20 @@
                 recordedChunks = [];
                 recordingSeconds = 0;
                 
-                // Set flag to protect button visibility inside fade loop
                 isStartingRecording = true;
 
                 requestAnimationFrame(() => {
                     clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
-                    showUI(); 
+                    
+                    hud.classList.add('ui-hidden');
+                    resSelector.classList.add('ui-hidden');
+                    clickTrigger.setTimeout;
                 });
 
-                // Clear previous timeout loops and kick off a clean fade countdown sequence
                 clearTimeout(fadeTimeout);
                 fadeTimeout = setTimeout(() => {
-                    isStartingRecording = false; // Release lock so button can fade on mouse stop later
-                    hideUI();
+                    isStartingRecording = false; 
+                    hideUI(); 
                 }, 3000);
 
                 mediaRecorder = new MediaRecorder(stream);
@@ -586,7 +578,7 @@
 
         window.addEventListener('mousemove', (e) => {
             if (Math.abs(e.clientX - lastX) > movementThreshold || Math.abs(e.clientY - lastY) > movementThreshold) {
-                isStartingRecording = false; // Break visibility hold if mouse moves manually
+                isStartingRecording = false; 
                 resetFadeTimer();
             }
             lastX = e.clientX; lastY = e.clientY;
