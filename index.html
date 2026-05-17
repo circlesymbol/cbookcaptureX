@@ -358,8 +358,8 @@ videoEncoder.configure({
         height: settings.height,
         bitrate: 14000000,
         framerate: 60,
-        latencyMode: 'realtime', 
-        hardwareAcceleration: 'prefer-hardware'
+        latencyMode: 'quality',
+        hardwareAcceleration: 'prefer-software'
     });
 
     hud.innerText = `⚙️ Processing Video. This May Take a While.;
