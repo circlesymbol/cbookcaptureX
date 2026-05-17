@@ -352,17 +352,17 @@ async function stopWebCodecsRecording() {
         }
     });
 
-    videoEncoder.configure({
-        codec: 'avc1.42E02A', 
+videoEncoder.configure({
+        codec: 'vp09.00.10.08',
         width: settings.width,
         height: settings.height,
-        bitrate: 14000000, // Balanced 14 Mbps for clean tracking
+        bitrate: 14000000,
         framerate: 60,
-        latencyMode: 'realtime', // Changed back to realtime to prevent buffering freezes
+        latencyMode: 'realtime', 
         hardwareAcceleration: 'prefer-hardware'
     });
 
-    hud.innerText = `⚙️ Processing ${rawFrameBuffer.length} Captured Frames...`;
+    hud.innerText = `⚙️ Processing Video. This May Take a While.;
 
     // Process frames asynchronously to let the hardware chip clear its internal queue
     for (let i = 0; i < rawFrameBuffer.length; i++) {
