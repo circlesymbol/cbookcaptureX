@@ -52,6 +52,8 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            /* Transition added to wrapper to handle sub-element fading gracefully */
+            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
         }
 
         #res-selector {
@@ -66,7 +68,7 @@
             outline: none;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-            transition: border-color 0.2s, background-color 0.2s;
+            transition: border-color 0.2s, background-color 0.2s, opacity 0.4s, visibility 0.4s;
         }
         #res-selector:hover {
             background: rgba(45, 45, 45, 0.95);
@@ -88,6 +90,7 @@
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+            transition: background 0.2s, opacity 0.4s, visibility 0.4s;
         }
         #click-trigger:hover {
             background: #e60000;
@@ -151,7 +154,6 @@
         #modal-overlay.modal-active {
             opacity: 1;
             visibility: visible;
-            /* FIX: Explicitly force standard default cursor visibility across the dimming area when modal is active */
             cursor: default !important;
         }
         #modal-box {
@@ -165,7 +167,6 @@
             border: 1px solid rgba(255,255,255,0.1);
             transform: scale(0.9);
             transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            /* Reset modal content cursor to default to ensure inner text doesn't show text cursor */
             cursor: default;
         }
         #modal-overlay.modal-active #modal-box {
@@ -241,11 +242,11 @@
 
     <div id="modal-overlay">
         <div id="modal-box">
-            <div id="modal-title">ℹ️ Format Notice</div>
+            <div id="modal-title">ℹ️ Local Capture Format Note</div>
             <div id="modal-text">
-                This capture has been saved directly as a raw <strong>.webm</strong> file to preserve performance. 
+                Your high bit-rate gameplay footage has been saved directly as a raw <strong>.webm</strong> file to preserve performance and prevent dropped frames. 
                 <br><br>
-                You may need to convert it into an <strong>.mp4</strong> for the file to be compatable with other software.
+                You may need to pass it through a media converter to transcode it into an <strong>.mp4</strong> if your editing layout or playback software requires it!
             </div>
             <button id="modal-btn">Got it, Download File</button>
         </div>
@@ -286,6 +287,9 @@
         let allowUIFading = false;
         let blockFadingForNotice = false;
         let pendingDownloadFn = null;
+        
+        // FIX: Flag to catch the exact moment recording starts and preserve button visibility
+        let isStartingRecording = false;
 
         function resetFadeTimer() {
             if (blockFadingForNotice || modalOverlay.classList.contains('modal-active')) return;
@@ -297,15 +301,27 @@
         }
 
         function showUI() {
-            if (!isRecording) hud.classList.remove('ui-hidden');
-            if (controlsWrapper.style.display !== 'none') controlsWrapper.classList.remove('ui-hidden');
+            hud.classList.remove('ui-hidden');
+            controlsWrapper.classList.remove('ui-hidden');
+            resSelector.classList.remove('ui-hidden');
+            clickTrigger.classList.remove('ui-hidden');
             document.body.classList.remove('hide-cursor');
         }
 
         function hideUI() {
             hud.classList.add('ui-hidden');
-            controlsWrapper.classList.add('ui-hidden');
-            document.body.classList.add('hide-cursor');
+            
+            // FIX: If we just started recording, keep the record button visible but fade everything else out
+            if (isStartingRecording) {
+                hud.classList.add('ui-hidden');
+                resSelector.classList.add('ui-hidden');
+                // Make sure wrapper doesn't vanish so the button stays drawn
+                controlsWrapper.classList.remove('ui-hidden');
+                document.body.classList.add('hide-cursor');
+            } else {
+                controlsWrapper.classList.add('ui-hidden');
+                document.body.classList.add('hide-cursor');
+            }
         }
 
         function triggerTVBanner(rawDeviceName, width, height, fps) {
@@ -338,7 +354,6 @@
 
         async function verifyAndInitCapture() {
             try {
-                // Explicitly clear the hidden cursor class on initial connection load sequence
                 document.body.classList.remove('hide-cursor');
 
                 const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -499,12 +514,21 @@
                 isRecording = true;
                 recordedChunks = [];
                 recordingSeconds = 0;
+                
+                // Set flag to protect button visibility inside fade loop
+                isStartingRecording = true;
 
                 requestAnimationFrame(() => {
                     clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
-                    resSelector.style.display = 'none';
-                    hud.classList.add('ui-hidden');
+                    showUI(); 
                 });
+
+                // Clear previous timeout loops and kick off a clean fade countdown sequence
+                clearTimeout(fadeTimeout);
+                fadeTimeout = setTimeout(() => {
+                    isStartingRecording = false; // Release lock so button can fade on mouse stop later
+                    hideUI();
+                }, 3000);
 
                 mediaRecorder = new MediaRecorder(stream);
                 
@@ -512,7 +536,6 @@
                 mediaRecorder.onstop = () => {
                     hud.style.color = '#fff';
                     hud.style.display = 'block';
-                    resSelector.style.display = 'block';
                     hud.innerText = "⏳ Processing Video...";
                     
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
@@ -544,6 +567,7 @@
                     clickTrigger.innerText = `⏹️ Stop [${formatTimeString(recordingSeconds)}]`;
                 }, 1000);
             } else {
+                isStartingRecording = false;
                 clearInterval(recordingInterval);
                 mediaRecorder.stop();
                 isRecording = false;
@@ -561,13 +585,22 @@
         });
 
         window.addEventListener('mousemove', (e) => {
-            if (Math.abs(e.clientX - lastX) > movementThreshold || Math.abs(e.clientY - lastY) > movementThreshold) resetFadeTimer();
+            if (Math.abs(e.clientX - lastX) > movementThreshold || Math.abs(e.clientY - lastY) > movementThreshold) {
+                isStartingRecording = false; // Break visibility hold if mouse moves manually
+                resetFadeTimer();
+            }
             lastX = e.clientX; lastY = e.clientY;
         });
         window.addEventListener('touchstart', resetFadeTimer);
         window.onkeydown = (e) => {
             if (controlsWrapper.style.display === 'none' || modalOverlay.classList.contains('modal-active')) return;
-            if (e.code === 'Space') { e.preventDefault(); toggleRecording(); } else { resetFadeTimer(); }
+            if (e.code === 'Space') { 
+                e.preventDefault(); 
+                toggleRecording(); 
+            } else { 
+                isStartingRecording = false;
+                resetFadeTimer(); 
+            }
         };
         clickTrigger.addEventListener('click', (e) => { e.blur(); toggleRecording(); });
         
