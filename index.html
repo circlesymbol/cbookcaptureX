@@ -303,7 +303,7 @@
         }
 
         function hideUI() {
-            if (isStartingRecording) {
+            if (isStartingRecording || isRecording) {
                 hud.classList.add('ui-hidden');
                 resSelector.classList.add('ui-hidden');
                 clickTrigger.classList.remove('ui-hidden');
@@ -312,7 +312,12 @@
                 resSelector.classList.add('ui-hidden');
                 clickTrigger.classList.add('ui-hidden');
             }
-            document.body.classList.add('hide-cursor');
+            // Hide the cursor during recording if mouse is still
+            if (isRecording) {
+                document.body.classList.add('hide-cursor');
+            } else if (!isStartingRecording) {
+                document.body.classList.add('hide-cursor');
+            }
         }
 
         function triggerTVBanner(rawDeviceName, width, height, fps) {
@@ -513,7 +518,7 @@
                     
                     hud.classList.add('ui-hidden');
                     resSelector.classList.add('ui-hidden');
-                    clickTrigger.setTimeout;
+                    clickTrigger.classList.remove('ui-hidden');
                 });
 
                 clearTimeout(fadeTimeout);
