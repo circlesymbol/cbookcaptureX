@@ -2,316 +2,107 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>60fps Local Web Capture</title>
+    <title>Gameplay Capture</title>
     <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: #000;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            user-select: none;
-        }
-        #v {
-            width: 100vw;
-            height: 100vh;
-            object-fit: contain;
-            display: block;
-            background: #000;
-        }
-        
-        /* Controls Layout */
-        #hud, #controls-wrapper {
-            position: fixed;
-            z-index: 999999;
-            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
-            opacity: 1;
-            visibility: visible;
-        }
-
-        #hud {
-            top: 15px;
-            left: 15px;
-            padding: 10px 20px;
-            background: rgba(0, 0, 0, 0.85);
-            color: #fff;
-            font-size: 14px;
-            font-weight: 500;
-            border-radius: 6px;
-            pointer-events: none;
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        }
-
-        #controls-wrapper {
-            bottom: 15px;
-            right: 15px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        #res-selector {
-            padding: 11px 15px;
-            background: rgba(30, 30, 30, 0.9);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            outline: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-            transition: border-color 0.2s, background-color 0.2s;
-        }
-        #res-selector:hover {
-            background: rgba(45, 45, 45, 0.95);
-            border-color: rgba(255, 255, 255, 0.4);
-        }
-        #res-selector option {
-            background: #1e1e1e;
-            color: #fff;
-        }
-
-        #click-trigger {
-            padding: 12px 20px;
-            background: #ff3333;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-        }
-        #click-trigger:hover {
-            background: #e60000;
-        }
-
-        /* OSD Banner */
-        #tv-banner {
-            position: fixed;
-            top: 40px;
-            right: 40px;
-            background: rgba(43, 47, 54, 0.95); 
-            color: #ffffff;
-            padding: 16px 30px;
-            border-radius: 3px;
-            box-shadow: 0 12px 36px rgba(0,0,0,0.75);
-            z-index: 1000000;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-            transform: translateY(-15px);
-            opacity: 0;
-            visibility: hidden;
-            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s, visibility 0.35s;
-            pointer-events: none;
-            border-left: 4px solid #00E676;
-        }
-        #tv-banner.banner-active {
-            transform: translateY(0);
-            opacity: 1;
-            visibility: visible;
-        }
-        #tv-input-title {
-            font-size: 20px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-            margin-bottom: 5px;
-            color: #ffffff;
-        }
-        #tv-input-specs {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.7);
-            font-weight: 400;
-            letter-spacing: 0.5px;
-        }
-
-        .ui-hidden {
-            opacity: 0 !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-        }
-        .hide-cursor {
-            cursor: none !important;
-        }
+        body { background: #111; color: #fff; font-family: sans-serif; margin: 0; padding: 20px; text-align: center; }
+        video { width: 80%; max-width: 800px; background: #000; border: 4px solid #333; border-radius: 8px; }
+        #hud { margin: 20px; font-size: 1.2rem; font-weight: bold; }
+        button { background: #ff3333; color: white; border: none; padding: 12px 24px; font-size: 1rem; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #cc0000; }
     </style>
 </head>
 <body>
 
+    <h1>Gameplay Capture</h1>
     <video id="v" autoplay playsinline></video>
-    <div id="hud">⏳ Checking Hardware Connection...</div>
-    
-    <div id="controls-wrapper" style="display: none;">
-        <select id="res-selector">
-            <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
-            <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
-            <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
-            <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
-            <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
-            <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
-            <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
-            <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
-            <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
-            <option value='{"w":1280,"h":720,"fps":30}'>720p HD @ 30Hz</option>
-            <option value='{"w":854,"h":480,"fps":60}'>480p ED @ 60Hz</option>
-        </select>
-        <button id="click-trigger">🔴 Record</button>
-    </div>
+    <div id="hud">🔴 Press Button or [SPACEBAR] to Start</div>
+    <button id="click-trigger">🔴 Start Recording</button>
 
-    <div id="tv-banner">
-        <div id="tv-input-title">DETECTING DEVICE...</div>
-        <div id="tv-input-specs">0x0 @ 0Hz</div>
-    </div>
-
-    <script>
-const videoElement = document.getElementById('v');
+<script>
+    const videoElement = document.getElementById('v');
     const hud = document.getElementById('hud');
-    const controlsWrapper = document.getElementById('controls-wrapper');
-    const resSelector = document.getElementById('res-selector');
     const clickTrigger = document.getElementById('click-trigger');
-    const tvBanner = document.getElementById('tv-banner');
-    const tvInputTitle = document.getElementById('tv-input-title');
-    const tvInputSpecs = document.getElementById('tv-input-specs');
     
     let isRecording = false;
     let stream = null;
-    let audioContext = null;
+    let videoProcessor = null;
     
-    // Clean, native recording pools
-    let mediaRecorder = null;
+    let frameStorageBuffer = []; 
     let recordedChunks = [];
     
-    let fadeTimeout;
-    let tvBannerTimeout;
+    const offlineCanvas = document.createElement('canvas');
+    const ctx = offlineCanvas.getContext('2d');
+    offlineCanvas.width = 1920;  // Kept your 1080p canvas scale
+    offlineCanvas.height = 1080;
+
     let recordingSeconds = 0;
     let recordingInterval = null;
-    let lastX = 0, lastY = 0;
-    const movementThreshold = 10;
-    let wasDisconnected = true;
-    let allowUIFading = false;
-
-    function resetFadeTimer() {
-        showUI();
-        clearTimeout(fadeTimeout);
-        if (allowUIFading) fadeTimeout = setTimeout(hideUI, 3000);
-    }
-
-    function showUI() {
-        if (!isRecording) hud.classList.remove('ui-hidden');
-        if (controlsWrapper.style.display !== 'none') controlsWrapper.classList.remove('ui-hidden');
-        document.body.classList.remove('hide-cursor');
-    }
-
-    function hideUI() {
-        hud.classList.add('ui-hidden');
-        controlsWrapper.classList.add('ui-hidden');
-        document.body.classList.add('hide-cursor');
-    }
 
     function formatTimeString(totalSeconds) {
-        const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-        const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+        const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
         const secs = (totalSeconds % 60).toString().padStart(2, '0');
-        return hrs + ':' + mins + ':' + secs;
+        return mins + ':' + secs;
     }
     
-    async function verifyAndInitCapture() {
+    async function initCapture() {
         try {
-            const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            permStream.getTracks().forEach(track => track.stop());
-
-            const videoDevices = devices.filter(d => d.kind === 'videoinput');
-            const audioDevices = devices.filter(d => d.kind === 'audioinput');
-
-            const externalVideoDevices = videoDevices.filter(device => {
-                const label = device.label.toLowerCase();
-                return !label.includes('integrated') && !label.includes('internal') && !label.includes('front') && !label.includes('webcam');
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 1920, height: 1080, frameRate: 60 },
+                audio: false
             });
-
-            if (externalVideoDevices.length === 0) {
-                allowUIFading = false;
-                clearInterval(recordingInterval);
-                if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-                controlsWrapper.style.display = 'none';
-                hud.style.display = 'block';
-                videoElement.srcObject = null;
-                hud.innerText = "⚠️ No Capture Card Detected!";
-                wasDisconnected = true;
-                showUI();
-                return;
-            }
-
-            if (!stream) {
-                const targetVideoId = externalVideoDevices[0].deviceId;
-                const selectedProfile = JSON.parse(resSelector.value);
-
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        deviceId: targetVideoId,
-                        width: { exact: selectedProfile.w }, 
-                        height: { exact: selectedProfile.h }, 
-                        frameRate: { exact: selectedProfile.fps },
-                        latencyMode: 'low' 
-                    },
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 }
-                });
-
-                videoElement.srcObject = stream;
-                videoElement.muted = true; 
-                
-                videoElement.onloadedmetadata = () => {
-                    videoElement.play();
-                    try {
-                        if (!audioContext) audioContext = new AudioContext();
-                        const hardwareSource = audioContext.createMediaStreamSource(stream);
-                        hardwareSource.connect(audioContext.destination);
-                    } catch (ae) {}
-                };
-
-                controlsWrapper.style.display = 'flex';
-                hud.style.display = 'block';
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                allowUIFading = true;
-                resetFadeTimer();
-
-                if (wasDisconnected) {
-                    wasDisconnected = false;
-                    setTimeout(() => {
-                        const settings = stream.getVideoTracks()[0].getSettings();
-                        tvInputTitle.innerText = externalVideoDevices[0].label;
-                        tvInputSpecs.innerText = settings.width + ' × ' + settings.height + ' @ ' + Math.round(settings.frameRate) + 'Hz';
-                        tvBanner.classList.add('banner-active');
-                        setTimeout(() => tvBanner.classList.remove('banner-active'), 4000);
-                    }, 500);
-                }
-            }
-        } catch (err) { wasDisconnected = true; }
+            videoElement.srcObject = stream;
+            hud.innerText = "🔴 Press Button or [SPACEBAR] to Start";
+        } catch (err) {
+            hud.innerText = "⚠️ Connection error.";
+        }
     }
 
-    function startNativeRecording() {
-        recordedChunks = [];
+    async function startFrameHoard() {
+        frameStorageBuffer = []; 
+        const videoTrack = stream.getVideoTracks()[0];
         
-        // Lock onto safe, lightweight native VP8 profile configuration at high data rates
-        const options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 25000000 };
+        videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
+        const reader = videoProcessor.readable.getReader();
+        
+        isRecording = true;
+        recordingSeconds = 0;
+        clickTrigger.innerText = '⏹️ Stop [00:00]';
+        hud.innerText = "Recording...";
 
-        mediaRecorder = new MediaRecorder(stream, options);
+        recordingInterval = setInterval(() => {
+            recordingSeconds++;
+            clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
+        }, 1000);
 
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) {
-                recordedChunks.push(e.data);
+        (async function hoard() {
+            while (isRecording) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (!isRecording) { value.close(); break; }
+                frameStorageBuffer.push(value); 
             }
+        })();
+    }
+
+    async function stopAndBake() {
+        isRecording = false;
+        clearInterval(recordingInterval);
+        clickTrigger.innerText = "💾 Saving File...";
+        hud.innerText = "Processing frames...";
+
+        recordedChunks = [];
+        const canvasStream = offlineCanvas.captureStream(60);
+        
+        const mediaRecorder = new MediaRecorder(canvasStream, {
+            mimeType: 'video/webm;codecs=vp8',
+            videoBitsPerSecond: 25000000
+        });
+        
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) recordedChunks.push(e.data);
         };
 
         mediaRecorder.onstop = () => {
-            hud.innerText = "⚙️ Saving Clean WebM Asset...";
-            
             const blob = new Blob(recordedChunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -323,55 +114,46 @@ const videoElement = document.getElementById('v');
             setTimeout(() => {
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
-                recordedChunks = [];
-                resSelector.style.display = 'inline-block';
+                frameStorageBuffer = [];
                 clickTrigger.innerText = "🔴 Start Recording";
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                resetFadeTimer();
+                hud.innerText = "🔴 Press Button or [SPACEBAR] to Start";
             }, 500);
         };
 
-        // Standard recording start (no time-slicing to guarantee container continuity)
-        mediaRecorder.start(); 
+        mediaRecorder.start();
 
-        isRecording = true;
-        recordingSeconds = 0;
-        clickTrigger.innerText = '⏹️ Stop [00:00:00]';
-        resSelector.style.display = 'none';
-        hud.classList.add('ui-hidden');
+        let currentFrameIndex = 0;
 
-        recordingInterval = setInterval(() => {
-            recordingSeconds++;
-            clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
-        }, 1000);
-    }
+        function bakeFrame() {
+            if (currentFrameIndex >= frameStorageBuffer.length) {
+                mediaRecorder.stop();
+                return;
+            }
 
-    function stopNativeRecording() {
-        isRecording = false;
-        clearInterval(recordingInterval);
-        clickTrigger.innerText = "🔴 Exporting...";
-        hud.classList.remove('ui-hidden');
-        
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
+            const videoFrame = frameStorageBuffer[currentFrameIndex];
+            ctx.drawImage(videoFrame, 0, 0, offlineCanvas.width, offlineCanvas.height);
+            videoFrame.close(); 
+
+            if (currentFrameIndex % 30 === 0) {
+                const percentage = Math.round((currentFrameIndex / frameStorageBuffer.length) * 100);
+                hud.innerText = "Baking Video: " + percentage + "%";
+            }
+
+            currentFrameIndex++;
+            setTimeout(bakeFrame, 16); 
         }
+
+        bakeFrame();
     }
 
-    function toggleRecording() {
+    function toggleCapture() {
         if (!stream) return;
-        if (!isRecording) startNativeRecording(); else stopNativeRecording();
+        if (!isRecording) startFrameHoard(); else stopAndBake();
     }
 
-    window.addEventListener('mousemove', (e) => {
-        if (Math.abs(e.clientX - lastX) > movementThreshold || Math.abs(e.clientY - lastY) > movementThreshold) resetFadeTimer();
-        lastX = e.clientX; lastY = e.clientY;
-    });
-    window.onkeydown = (e) => {
-        if (controlsWrapper.style.display === 'none') return;
-        if (e.code === 'Space') { e.preventDefault(); toggleRecording(); } else { resetFadeTimer(); }
-    };
-    clickTrigger.addEventListener('click', (e) => { e.blur(); toggleRecording(); });
-    window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
-    </script>
+    window.onkeydown = (e) => { if (e.code === 'Space') { e.preventDefault(); toggleCapture(); } };
+    clickTrigger.addEventListener('click', toggleCapture);
+    window.addEventListener('DOMContentLoaded', initCapture);
+</script>
 </body>
 </html>
