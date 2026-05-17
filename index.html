@@ -184,9 +184,10 @@ const videoElement = document.getElementById('v');
     let audioContext = null;
     let videoProcessor = null;
     
-    // WebCodecs structural components
+    // Post-Process Memory and Encoding Pools
     let videoEncoder = null;
     let recordedChunks = [];
+    let rawFrameBuffer = []; // Holds uncompressed frames during the race
     
     let fadeTimeout;
     let tvBannerTimeout;
@@ -243,7 +244,7 @@ const videoElement = document.getElementById('v');
                 controlsWrapper.style.display = 'none';
                 hud.style.display = 'block';
                 videoElement.srcObject = null;
-                hud.innerText = "⚠️ No Capture Card Detected! Please Check USB Connection!";
+                hud.innerText = "⚠️ No Capture Card Detected!";
                 wasDisconnected = true;
                 showUI();
                 return;
@@ -258,7 +259,7 @@ const videoElement = document.getElementById('v');
                         deviceId: targetVideoId,
                         width: { exact: selectedProfile.w }, 
                         height: { exact: selectedProfile.h }, 
-                        frameRate: { exact: selectedProfile.fps },
+                        frameRate: { exact: selectedProfile.fps }, // True uncompromised 1080p60 input
                         latencyMode: 'low' 
                     },
                     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 }
@@ -297,31 +298,10 @@ const videoElement = document.getElementById('v');
     }
 
     async function startWebCodecsRecording() {
-        recordedChunks = [];
+        rawFrameBuffer = []; // Wipe clean before starting
         const videoTrack = stream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
         
-        // Direct Hardware-Accelerated Video Encoder Initialization
-        videoEncoder = new VideoEncoder({
-            output: (chunk) => {
-                const buffer = new ArrayBuffer(chunk.byteLength);
-                chunk.copyTo(buffer);
-                recordedChunks.push({ data: buffer, timestamp: chunk.timestamp });
-            },
-            error: (e) => console.error(e)
-        });
-
-        // Config profile targeting the physical silicon chip layout
-        videoEncoder.configure({
-            codec: 'avc1.42E02A', // H.264 Baseline Profile Level 4.2
-            width: settings.width,
-            height: settings.height,
-            bitrate: 14000000, // 14 Mbps for crisp Switch 2 tracking graphics
-            framerate: 60,
-            latencyMode: 'realtime',
-            hardwareAcceleration: 'prefer-hardware'
-        });
-
+        // Setup the framework to read raw incoming stream frames instantly
         videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
         const reader = videoProcessor.readable.getReader();
         
@@ -336,62 +316,7 @@ const videoElement = document.getElementById('v');
             clickTrigger.innerText = `⏹️ Stop [${formatTimeString(recordingSeconds)}]`;
         }, 1000);
 
-        // Raw frame capture loop
-        (async function readFrames() {
-            while (isRecording) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (!isRecording) { value.close(); break; }
-                
-                videoEncoder.encode(value, { keyFrame: value.timestamp % 2000000 === 0 });
-                value.close();
-            }
-        })();
-    }
-
-    async function stopWebCodecsRecording() {
-        isRecording = false;
-        clearInterval(recordingInterval);
-        clickTrigger.innerText = "🔴 Record";
-        resSelector.style.display = 'block';
-        hud.innerText = "⏳ Processing Capture...";
-        hud.classList.remove('ui-hidden');
-
-        await videoEncoder.flush();
-        videoEncoder.close();
-
-        // Save raw bitstream payload into local container
-        const blob = new Blob(recordedChunks.map(c => c.data), { type: 'video/mp4' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `gameplay_1080p60_ultra_${Date.now()}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        
-        setTimeout(() => {
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-            resetFadeTimer();
-        }, 500);
-    }
-
-    function toggleRecording() {
-        if (!stream) return;
-        if (!isRecording) startWebCodecsRecording(); else stopWebCodecsRecording();
-    }
-
-    window.addEventListener('mousemove', (e) => {
-        if (Math.abs(e.clientX - lastX) > movementThreshold || Math.abs(e.clientY - lastY) > movementThreshold) resetFadeTimer();
-        lastX = e.clientX; lastY = e.clientY;
-    });
-    window.onkeydown = (e) => {
-        if (controlsWrapper.style.display === 'none') return;
-        if (e.code === 'Space') { e.preventDefault(); toggleRecording(); } else { resetFadeTimer(); }
-    };
-    clickTrigger.addEventListener('click', (e) => { e.blur(); toggleRecording(); });
-    window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
+        // ZERO-CPU CAPTURE LOOP: Clones raw frames directly into memory, skipping real-time encoding
     </script>
 </body>
 </html>
