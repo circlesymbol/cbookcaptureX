@@ -12,25 +12,29 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background-color:
+            background-color: #000;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             user-select: none;
         }
+        #v {
             width: 100vw;
             height: 100vh;
             object-fit: contain;
             display: block;
         }
-
+        
+        /* Controls Layout */
+        #hud, #controls-wrapper {
             position: fixed;
             z-index: 999999;
         }
 
+        #hud {
             top: 15px;
             left: 15px;
             padding: 10px 20px;
             background: rgba(0, 0, 0, 0.85);
-            color:
+            color: #fff;
             font-size: 14px;
             font-weight: 500;
             border-radius: 6px;
@@ -40,6 +44,7 @@
             transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
         }
 
+        #controls-wrapper {
             bottom: 15px;
             right: 15px;
             display: flex;
@@ -47,9 +52,10 @@
             align-items: center;
         }
 
+        #res-selector {
             padding: 11px 15px;
             background: rgba(30, 30, 30, 0.9);
-            color:
+            color: #fff;
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 6px;
             font-size: 13px;
@@ -60,16 +66,19 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
             transition: border-color 0.2s, background-color 0.2s, opacity 0.4s, visibility 0.4s;
         }
+        #res-selector:hover {
             background: rgba(45, 45, 45, 0.95);
             border-color: rgba(255, 255, 255, 0.4);
         }
-            background:
-            color:
+        #res-selector option {
+            background: #1e1e1e;
+            color: #fff;
         }
 
+        #click-trigger {
             padding: 12px 20px;
-            background:
-            color:
+            background: #ff3333;
+            color: #fff;
             border: none;
             border-radius: 6px;
             cursor: pointer;
@@ -79,15 +88,18 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
             transition: background 0.2s, opacity 0.4s, visibility 0.4s;
         }
-            background:
-            opacity: 1.0 !important;
+        #click-trigger:hover {
+            background: #e60000;
+            opacity: 1.0 !important; /* Forces full visibility on hover regardless of recording state */
         }
 
+        /* OSD Banner */
+        #tv-banner {
             position: fixed;
             top: 40px;
             right: 40px;
-            background: rgba(43, 47, 54, 0.95);
-            color:
+            background: rgba(43, 47, 54, 0.95); 
+            color: #ffffff;
             padding: 16px 30px;
             border-radius: 3px;
             box-shadow: 0 12px 36px rgba(0,0,0,0.75);
@@ -98,24 +110,29 @@
             visibility: hidden;
             transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s, visibility 0.35s;
             pointer-events: none;
-            border-left: 4px solid
+            border-left: 4px solid #00E676;
         }
+        #tv-banner.banner-active {
             transform: translateY(0);
             opacity: 1;
             visibility: visible;
         }
+        #tv-input-title {
             font-size: 20px;
             font-weight: 600;
             letter-spacing: 0.3px;
             margin-bottom: 5px;
-            color:
+            color: #ffffff;
         }
+        #tv-input-specs {
             font-size: 13px;
             color: rgba(255, 255, 255, 0.7);
             font-weight: 400;
             letter-spacing: 0.5px;
         }
 
+        /* Format Warning Modal Styles */
+        #modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
@@ -131,12 +148,14 @@
             visibility: hidden;
             transition: opacity 0.3s, visibility 0.3s;
         }
+        #modal-overlay.modal-active {
             opacity: 1;
             visibility: visible;
             cursor: default !important;
         }
-            background:
-            color:
+        #modal-box {
+            background: #1e1e24;
+            color: #fff;
             padding: 25px 30px;
             border-radius: 8px;
             max-width: 420px;
@@ -147,25 +166,29 @@
             transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             cursor: default;
         }
+        #modal-overlay.modal-active #modal-box {
             transform: scale(1);
         }
+        #modal-title {
             font-size: 18px;
             font-weight: bold;
             margin-bottom: 12px;
-            color:
+            color: #fff;
             display: flex;
             align-items: center;
             gap: 8px;
         }
+        #modal-text {
             font-size: 14px;
             line-height: 1.5;
             color: rgba(255,255,255,0.85);
             margin-bottom: 20px;
         }
+        #modal-btn {
             width: 100%;
             padding: 12px;
-            background:
-            color:
+            background: #00E676;
+            color: #000;
             border: none;
             border-radius: 4px;
             font-weight: bold;
@@ -173,7 +196,8 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-            background:
+        #modal-btn:hover {
+            background: #00c862;
         }
 
         .ui-hidden {
@@ -182,7 +206,7 @@
             pointer-events: none !important;
         }
         .ui-low-opacity {
-            opacity: 0.3 !important;
+            opacity: 0.3 !important; /* Keeps timestamp barely visible during idle recording status */
         }
         .hide-cursor {
             cursor: none !important;
@@ -193,7 +217,7 @@
 
     <video id="v" autoplay playsinline muted></video>
     <div id="hud">⏳ Checking Hardware Connection...</div>
-
+    
     <div id="controls-wrapper" style="display: none;">
         <select id="res-selector">
             <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
@@ -239,31 +263,31 @@
         const tvInputSpecs = document.getElementById('tv-input-specs');
         const modalOverlay = document.getElementById('modal-overlay');
         const modalBtn = document.getElementById('modal-btn');
-
+        
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
         let stream = null;
-
+        
         let audioCtx = null;
         let audioSourceNode = null;
-
+        
         let fadeTimeout;
         let tvBannerTimeout;
         let fallbackNoticeTimeout;
-
+        
         let recordingSeconds = 0;
         let recordingInterval = null;
-
+        
         let lastX = 0;
         let lastY = 0;
         const movementThreshold = 10;
-
+        
         let wasDisconnected = true;
         let allowUIFading = false;
         let blockFadingForNotice = false;
         let pendingDownloadFn = null;
-
+        
         let isStartingRecording = false;
 
         function resetFadeTimer() {
@@ -287,6 +311,7 @@
             if (isStartingRecording || isRecording) {
                 hud.classList.add('ui-hidden');
                 resSelector.classList.add('ui-hidden');
+                // Instead of completely hiding the record button, drop it to low opacity
                 clickTrigger.classList.remove('ui-hidden');
                 clickTrigger.classList.add('ui-low-opacity');
             } else {
@@ -295,7 +320,7 @@
                 clickTrigger.classList.add('ui-hidden');
                 clickTrigger.classList.remove('ui-low-opacity');
             }
-
+            
             if (isRecording || !isStartingRecording) {
                 document.body.classList.add('hide-cursor');
             }
@@ -371,17 +396,17 @@
                     }
 
                     stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
+                        video: { 
                             deviceId: targetVideoId,
-                            width: { ideal: selectedProfile.w },
-                            height: { ideal: selectedProfile.h },
-                            frameRate: { ideal: selectedProfile.fps }
+                            width: { ideal: selectedProfile.w }, 
+                            height: { ideal: selectedProfile.h }, 
+                            frameRate: { ideal: selectedProfile.fps } 
                         },
                         audio: audioConstraint
                     });
-
+                    
                     videoEl.srcObject = stream;
-
+                    
                     cleanupAudioPipeline();
                     if (stream.getAudioTracks().length > 0) {
                         audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
@@ -415,9 +440,9 @@
             if (videoTrack) {
                 const settings = videoTrack.getSettings();
                 triggerTVBanner(
-                    deviceLabel || "USB Capture Card",
-                    settings.width || 1280,
-                    settings.height || 720,
+                    deviceLabel || "USB Capture Card", 
+                    settings.width || 1280, 
+                    settings.height || 720, 
                     Math.round(settings.frameRate || 60)
                 );
                 return settings;
@@ -434,27 +459,27 @@
 
             try {
                 const requested = JSON.parse(resSelector.value);
-
+                
                 await videoTrack.applyConstraints({
                     width: { ideal: requested.w },
                     height: { ideal: requested.h },
                     frameRate: { ideal: requested.fps }
                 });
-
+                
                 await new Promise(r => setTimeout(r, 250));
                 const trueSettings = updateOSD("Updated Resolution");
 
                 if (trueSettings) {
                     const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
-
+                    
                     if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
                         blockFadingForNotice = true;
                         showUI();
-
+                        
                         hud.style.display = 'block';
                         hud.style.color = '#ffaa00';
                         hud.innerText = `⚠️ Device does not support requested format! Currently Displaying: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
-
+                        
                         for (let option of resSelector.options) {
                             const val = JSON.parse(option.value);
                             if (val.w === trueSettings.width && val.h === trueSettings.height && val.fps === roundedFrameRate) {
@@ -491,12 +516,12 @@
                 isRecording = true;
                 recordedChunks = [];
                 recordingSeconds = 0;
-
+                
                 isStartingRecording = true;
 
                 requestAnimationFrame(() => {
                     clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
-
+                    
                     hud.classList.add('ui-hidden');
                     resSelector.classList.add('ui-hidden');
                     clickTrigger.classList.remove('ui-hidden');
@@ -505,21 +530,21 @@
 
                 clearTimeout(fadeTimeout);
                 fadeTimeout = setTimeout(() => {
-                    isStartingRecording = false;
-                    hideUI();
+                    isStartingRecording = false; 
+                    hideUI(); 
                 }, 3000);
 
                 mediaRecorder = new MediaRecorder(stream);
-
+                
                 mediaRecorder.ondataavailable = (e) => { if (e.data?.size > 0) recordedChunks.push(e.data); };
                 mediaRecorder.onstop = () => {
                     hud.style.color = '#fff';
                     hud.style.display = 'block';
                     hud.innerText = "⏳ Processing Video...";
-
+                    
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     const url = URL.createObjectURL(blob);
-
+                    
                     pendingDownloadFn = () => {
                         const a = document.createElement('a');
                         a.href = url;
@@ -527,7 +552,7 @@
                         a.download = `gameplay_${settings?.height || 720}p${Math.round(settings?.frameRate || 60)}_${Date.now()}.webm`;
                         document.body.appendChild(a);
                         a.click();
-
+                        
                         setTimeout(() => {
                             document.body.removeChild(a);
                             window.URL.revokeObjectURL(url);
@@ -565,7 +590,7 @@
 
         window.addEventListener('mousemove', (e) => {
             if (Math.abs(e.clientX - lastX) > movementThreshold || Math.abs(e.clientY - lastY) > movementThreshold) {
-                isStartingRecording = false;
+                isStartingRecording = false; 
                 resetFadeTimer();
             }
             lastX = e.clientX; lastY = e.clientY;
@@ -573,22 +598,22 @@
         window.addEventListener('touchstart', resetFadeTimer);
         window.onkeydown = (e) => {
             if (controlsWrapper.style.display === 'none' || modalOverlay.classList.contains('modal-active')) return;
-            if (e.code === 'Space') {
-                e.preventDefault();
-                toggleRecording();
-            } else {
+            if (e.code === 'Space') { 
+                e.preventDefault(); 
+                toggleRecording(); 
+            } else { 
                 isStartingRecording = false;
-                resetFadeTimer();
+                resetFadeTimer(); 
             }
         };
         clickTrigger.addEventListener('click', (e) => { e.blur(); toggleRecording(); });
-
-        navigator.mediaDevices.addEventListener('devicechange', () => {
+        
+        navigator.mediaDevices.addEventListener('devicechange', () => { 
             cleanupAudioPipeline();
-            if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-            verifyAndInitCapture();
+            if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } 
+            verifyAndInitCapture(); 
         });
-
+        
         window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
     </script>
 </body>
