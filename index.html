@@ -184,12 +184,12 @@ const videoElement = document.getElementById('v');
     let audioContext = null;
     let videoProcessor = null;
     
-    // Memory pools for true post-processing
+    // Stable post-processing memory arrays
     let rawFrameBuffer = []; 
     let recordedChunks = [];
     let mediaRecorder = null;
     
-    // Hidden offline canvas layer for baking the file safely
+    // Offline rendering canvas layers
     const offlineCanvas = document.createElement('canvas');
     const ctx = offlineCanvas.getContext('2d');
     
@@ -319,7 +319,7 @@ const videoElement = document.getElementById('v');
             clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
         }, 1000);
 
-        // TRUE POST-PROCESSING HOARD LOOP: Zero compression math, 100% smooth inputs
+        // SILENT FRAME HOARD LOOP: Pushes raw frames to memory with zero live CPU compression strain
         (async function readFrames() {
             while (isRecording) {
                 const { done, value } = await reader.read();
@@ -343,12 +343,17 @@ const videoElement = document.getElementById('v');
         offlineCanvas.height = settings.height;
         recordedChunks = [];
 
-        // Capture the canvas stream at a locked, stable 60fps frame rate
+        // Track the flipbook canvas at 60fps
         const canvasStream = offlineCanvas.captureStream(60);
         
-        let options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 20000000 };
+        // Force the native encoder pipeline straight into lightweight hardware H.264 targets
+        let options = { mimeType: 'video/webm;codecs=h264', videoBitsPerSecond: 20000000 };
+        
         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            options = { mimeType: 'video/webm', videoBitsPerSecond: 20000000 };
+            options = { mimeType: 'video/mp4;codecs=avc1.4d002a', videoBitsPerSecond: 20000000 };
+        }
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { videoBitsPerSecond: 20000000 };
         }
 
         mediaRecorder = new MediaRecorder(canvasStream, options);
@@ -358,11 +363,14 @@ const videoElement = document.getElementById('v');
         };
 
         mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'gameplay_1080p60_vp9_perfect_' + Date.now() + '.webm';
+            
+            const ext = mediaRecorder.mimeType.includes('mp4') ? '.mp4' : '.webm';
+            a.download = 'gameplay_1080p60_h264_' + Date.now() + ext;
+            
             document.body.appendChild(a);
             a.click();
             
@@ -378,13 +386,12 @@ const videoElement = document.getElementById('v');
             }, 500);
         };
 
-        // Start recording the canvas offline stream
         mediaRecorder.start();
         hud.innerText = "⚙️ Processing " + rawFrameBuffer.length + " Captured Frames...";
 
         let index = 0;
 
-        // Bake the frames onto the canvas sequentially at a pace the CPU can handle safely
+        // Sequentially stitch the buffered frames out to the hardware-accelerated recorder
         function bakeNextFrame() {
             if (index >= rawFrameBuffer.length) {
                 mediaRecorder.stop();
@@ -392,22 +399,18 @@ const videoElement = document.getElementById('v');
             }
 
             const frame = rawFrameBuffer[index];
-            
-            // Draw raw bitmap frame onto our offline canvas
             ctx.drawImage(frame, 0, 0, offlineCanvas.width, offlineCanvas.height);
-            frame.close(); // Instantly free up system RAM space
+            frame.close(); // Flush frame immediately out of active system memory
 
             if (index % 30 === 0) {
                 const pct = Math.round((index / rawFrameBuffer.length) * 100);
-                hud.innerText = "⚙️ Baking VP9 Archive: " + pct + "%";
+                hud.innerText = "⚙️ Rendering H.264 Master: " + pct + "%";
             }
 
             index++;
-            // Give the browser 16ms (1 frame duration at 60fps) to securely record the canvas state
-            setTimeout(bakeNextFrame, 16);
+            setTimeout(bakeNextFrame, 16); // Balanced cadence pacing to let MediaRecorder lock the frame state
         }
 
-        // Fire off the backend renderer engine
         bakeNextFrame();
     }
 
