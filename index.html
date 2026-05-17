@@ -131,6 +131,73 @@
             letter-spacing: 0.5px;
         }
 
+        /* Format Warning Modal Styles */
+        #modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 2000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        #modal-overlay.modal-active {
+            opacity: 1;
+            visibility: visible;
+        }
+        #modal-box {
+            background: #1e1e24;
+            color: #fff;
+            padding: 25px 30px;
+            border-radius: 8px;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.1);
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #modal-overlay.modal-active #modal-box {
+            transform: scale(1);
+        }
+        #modal-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #ffaa00;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #modal-text {
+            font-size: 14px;
+            line-height: 1.5;
+            color: rgba(255,255,255,0.85);
+            margin-bottom: 20px;
+        }
+        #modal-btn {
+            width: 100%;
+            padding: 12px;
+            background: #00E676;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #modal-btn:hover {
+            background: #00c862;
+        }
+
         .ui-hidden {
             opacity: 0 !important;
             visibility: hidden !important;
@@ -147,25 +214,37 @@
     <div id="hud">⏳ Checking Hardware Connection...</div>
     
     <div id="controls-wrapper" style="display: none;">
-     <select id="res-selector">
-    <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
-    <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
-    <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
-    <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
-    <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
-    <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
-    <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
-    <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
-    <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
-    <option value='{"w":1280,"h":720,"fps":30}'>720p HD @ 30Hz</option>
-    <option value='{"w":854,"h":480,"fps":60}'>480p ED @ 60Hz</option>
-</select>
+        <select id="res-selector">
+            <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
+            <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
+            <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
+            <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
+            <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
+            <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
+            <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
+            <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
+            <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
+            <option value='{"w":1280,"h":720,"fps":30}'>720p HD @ 30Hz</option>
+            <option value='{"w":854,"h":480,"fps":60}'>480p ED @ 60Hz</option>
+        </select>
         <button id="click-trigger">🔴 Record</button>
     </div>
 
     <div id="tv-banner">
         <div id="tv-input-title">DETECTING DEVICE...</div>
         <div id="tv-input-specs">0x0 @ 0Hz</div>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="modal-box">
+            <div id="modal-title">ℹ️ Local Capture Format Note</div>
+            <div id="modal-text">
+                Your high bit-rate gameplay footage has been saved directly as a raw <strong>.webm</strong> file to preserve performance and prevent dropped frames. 
+                <br><br>
+                You may need to pass it through a media converter to transcode it into an <strong>.mp4</strong> if your editing layout or playback software requires it!
+            </div>
+            <button id="modal-btn">Got it, Download File</button>
+        </div>
     </div>
 
     <script>
@@ -177,6 +256,8 @@
         const tvBanner = document.getElementById('tv-banner');
         const tvInputTitle = document.getElementById('tv-input-title');
         const tvInputSpecs = document.getElementById('tv-input-specs');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalBtn = document.getElementById('modal-btn');
         
         let mediaRecorder;
         let recordedChunks = [];
@@ -200,9 +281,10 @@
         let wasDisconnected = true;
         let allowUIFading = false;
         let blockFadingForNotice = false;
+        let pendingDownloadFn = null;
 
         function resetFadeTimer() {
-            if (blockFadingForNotice) return;
+            if (blockFadingForNotice || modalOverlay.classList.contains('modal-active')) return;
             showUI();
             clearTimeout(fadeTimeout);
             if (allowUIFading) {
@@ -256,7 +338,6 @@
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 permStream.getTracks().forEach(track => track.stop());
 
-                // FIX: Fixed initialization reference error typo here
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
                 const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
@@ -280,35 +361,35 @@
                     return;
                 }
 
-              if (!stream) {
-    const targetVideoId = externalVideoDevices[0].deviceId;
-    const selectedProfile = JSON.parse(resSelector.value);
+                if (!stream) {
+                    const targetVideoId = externalVideoDevices[0].deviceId;
+                    const selectedProfile = JSON.parse(resSelector.value);
 
-    let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-    const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
-    if (externalAudioDevices.length > 0) {
-        audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
-    }
+                    let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+                    const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
+                    if (externalAudioDevices.length > 0) {
+                        audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
+                    }
 
-    stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-            deviceId: targetVideoId,
-            width: { ideal: selectedProfile.w }, 
-            height: { ideal: selectedProfile.h }, 
-            frameRate: { ideal: selectedProfile.fps } 
-        },
-        audio: audioConstraint
-    });
-    
-    videoEl.srcObject = stream;
-    
-    cleanupAudioPipeline();
-    if (stream.getAudioTracks().length > 0) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-        audioSourceNode = audioCtx.createMediaStreamSource(stream);
-        audioSourceNode.connect(audioCtx.destination);
-    }
-}
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            deviceId: targetVideoId,
+                            width: { ideal: selectedProfile.w }, 
+                            height: { ideal: selectedProfile.h }, 
+                            frameRate: { ideal: selectedProfile.fps } 
+                        },
+                        audio: audioConstraint
+                    });
+                    
+                    videoEl.srcObject = stream;
+                    
+                    cleanupAudioPipeline();
+                    if (stream.getAudioTracks().length > 0) {
+                        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+                        audioSourceNode = audioCtx.createMediaStreamSource(stream);
+                        audioSourceNode.connect(audioCtx.destination);
+                    }
+                }
 
                 controlsWrapper.style.display = 'flex';
                 if (!isRecording && !blockFadingForNotice) {
@@ -345,7 +426,7 @@
             return null;
         }
 
-  resSelector.addEventListener('change', async () => {
+        resSelector.addEventListener('change', async () => {
             const videoTrack = stream?.getVideoTracks()[0];
             if (!videoTrack) return;
 
@@ -362,7 +443,7 @@
                 });
                 
                 await new Promise(r => setTimeout(r, 250));
-                const trueSettings = updateOSD("Updated Resolution Settings");
+                const trueSettings = updateOSD("Updated Resolution");
 
                 if (trueSettings) {
                     const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
@@ -375,7 +456,7 @@
                         hud.style.color = '#ffaa00';
                         hud.innerText = `⚠️ Device does not support requested format! Currently Displaying: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
                         
-                        // FIX: Scan through the selector options and force the drop-down to match the true hardware fallback format
+                        // FIX: Syncs drop-down display with actual hardware settings on fallback failure
                         for (let option of resSelector.options) {
                             const val = JSON.parse(option.value);
                             if (val.w === trueSettings.width && val.h === trueSettings.height && val.fps === roundedFrameRate) {
@@ -430,20 +511,27 @@
                     
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
                     
-                    const settings = stream.getVideoTracks()[0]?.getSettings();
-                    a.download = `gameplay_${settings?.height || 720}p${Math.round(settings?.frameRate || 60)}_${Date.now()}.webm`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                        resetFadeTimer();
-                    }, 150);
+                    // FIX: Modal intercepts file compilation loop before triggering download link
+                    pendingDownloadFn = () => {
+                        const a = document.createElement('a');
+                        a.href = url;
+                        const settings = stream.getVideoTracks()[0]?.getSettings();
+                        a.download = `gameplay_${settings?.height || 720}p${Math.round(settings?.frameRate || 60)}_${Date.now()}.webm`;
+                        document.body.appendChild(a);
+                        a.click();
+                        
+                        setTimeout(() => {
+                            document.body.removeChild(a);
+                            window.URL.revokeObjectURL(url);
+                            hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                            resetFadeTimer();
+                        }, 150);
+                    };
+
+                    // Reveal Custom Warning Overlay Element
+                    showUI();
+                    modalOverlay.classList.add('modal-active');
                 };
 
                 mediaRecorder.start(100);
@@ -460,13 +548,22 @@
             }
         }
 
+        // Action confirmation event for closing modal window and executing safe file extraction
+        modalBtn.addEventListener('click', () => {
+            modalOverlay.classList.remove('modal-active');
+            if (pendingDownloadFn) {
+                pendingDownloadFn();
+                pendingDownloadFn = null;
+            }
+        });
+
         window.addEventListener('mousemove', (e) => {
             if (Math.abs(e.clientX - lastX) > movementThreshold || Math.abs(e.clientY - lastY) > movementThreshold) resetFadeTimer();
             lastX = e.clientX; lastY = e.clientY;
         });
         window.addEventListener('touchstart', resetFadeTimer);
         window.onkeydown = (e) => {
-            if (controlsWrapper.style.display === 'none') return;
+            if (controlsWrapper.style.display === 'none' || modalOverlay.classList.contains('modal-active')) return;
             if (e.code === 'Space') { e.preventDefault(); toggleRecording(); } else { resetFadeTimer(); }
         };
         clickTrigger.addEventListener('click', (e) => { e.blur(); toggleRecording(); });
