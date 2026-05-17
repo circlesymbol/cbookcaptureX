@@ -182,10 +182,16 @@ const videoElement = document.getElementById('v');
     let isRecording = false;
     let stream = null;
     let audioContext = null;
+    let videoProcessor = null;
     
-    // Stable native recording pools
-    let mediaRecorder = null;
+    // Memory pools for true post-processing
+    let rawFrameBuffer = []; 
     let recordedChunks = [];
+    let mediaRecorder = null;
+    
+    // Hidden offline canvas canvas layer for baking the file safely
+    const offlineCanvas = document.createElement('canvas');
+    const ctx = offlineCanvas.getContext('2d');
     
     let fadeTimeout;
     let tvBannerTimeout;
@@ -295,49 +301,13 @@ const videoElement = document.getElementById('v');
         } catch (err) { wasDisconnected = true; }
     }
 
-    function startNativeRecording() {
-        recordedChunks = [];
+    async function startWebCodecsRecording() {
+        rawFrameBuffer = []; 
+        const videoTrack = stream.getVideoTracks()[0];
         
-        // Pick the best available VP9 profile container configuration
-        let options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 16000000 };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            // Fallback just in case Chrome OS limits sub-profiles
-            options = { mimeType: 'video/webm', videoBitsPerSecond: 16000000 };
-        }
-
-        mediaRecorder = new MediaRecorder(stream, options);
-
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) {
-                recordedChunks.push(e.data);
-            }
-        };
-
-        mediaRecorder.onstop = () => {
-            hud.innerText = "⚙️ Finalizing VP9 File structure...";
-            
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'gameplay_1080p60_vp9_' + Date.now() + '.webm';
-            document.body.appendChild(a);
-            a.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                recordedChunks = [];
-                resSelector.style.display = 'inline-block';
-                clickTrigger.innerText = "🔴 Start Recording";
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                resetFadeTimer();
-            }, 500);
-        };
-
-        // Request data chunks every 1 second to keep memory allocations stable
-        mediaRecorder.start(1000); 
-
+        videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
+        const reader = videoProcessor.readable.getReader();
+        
         isRecording = true;
         recordingSeconds = 0;
         clickTrigger.innerText = '⏹️ Stop [00:00:00]';
@@ -348,22 +318,102 @@ const videoElement = document.getElementById('v');
             recordingSeconds++;
             clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
         }, 1000);
+
+        // TRUE POST-PROCESSING HOARD LOOP: Zero compression math, 100% smooth inputs
+        (async function readFrames() {
+            while (isRecording) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (!isRecording) { value.close(); break; }
+                rawFrameBuffer.push(value); 
+            }
+        })();
     }
 
-    function stopNativeRecording() {
+    async function stopWebCodecsRecording() {
         isRecording = false;
         clearInterval(recordingInterval);
-        clickTrigger.innerText = "🔴 Saving File...";
+        clickTrigger.innerText = "🔴 Processing...";
         hud.classList.remove('ui-hidden');
         
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
+        const videoTrack = stream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        
+        offlineCanvas.width = settings.width;
+        offlineCanvas.height = settings.height;
+        recordedChunks = [];
+
+        // Capture the canvas stream at a locked, stable 60fps frame rate
+        const canvasStream = offlineCanvas.captureStream(60);
+        
+        let options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 20000000 };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'video/webm', videoBitsPerSecond: 20000000 };
         }
+
+        mediaRecorder = new MediaRecorder(canvasStream, options);
+        
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'gameplay_1080p60_vp9_perfect_' + Date.now() + '.webm';
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                rawFrameBuffer = [];
+                recordedChunks = [];
+                resSelector.style.display = 'inline-block';
+                clickTrigger.innerText = "🔴 Start Recording";
+                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                resetFadeTimer();
+            }, 500);
+        };
+
+        // Start recording the canvas offline stream
+        mediaRecorder.start();
+        hud.innerText = "⚙️ Processing " + rawFrameBuffer.length + " Captured Frames...";
+
+        let index = 0;
+
+        // Bake the frames onto the canvas sequentially at a pace the CPU can handle safely
+        function bakeNextFrame() {
+            if (index >= rawFrameBuffer.length) {
+                mediaRecorder.stop();
+                return;
+            }
+
+            const frame = rawFrameBuffer[index];
+            
+            // Draw raw bitmap frame onto our offline canvas
+            ctx.drawImage(frame, 0, 0, offlineCanvas.width, offlineCanvas.height);
+            frame.close(); // Instantly free up system RAM space
+
+            if (index % 30 === 0) {
+                const pct = Math.round((index / rawFrameBuffer.length) * 100);
+                hud.innerText = "⚙️ Baking VP9 Archive: " + pct + "%";
+            }
+
+            index++;
+            // Give the browser 16ms (1 frame duration at 60fps) to securely record the canvas state
+            setTimeout(bakeNextFrame, 16);
+        }
+
+        // Fire off the backend renderer engine
+        bakeNextFrame();
     }
 
     function toggleRecording() {
         if (!stream) return;
-        if (!isRecording) startNativeRecording(); else stopNativeRecording();
+        if (!isRecording) startWebCodecsRecording(); else stopWebCodecsRecording();
     }
 
     window.addEventListener('mousemove', (e) => {
