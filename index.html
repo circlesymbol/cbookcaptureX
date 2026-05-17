@@ -39,7 +39,6 @@
     
     async function initCapture() {
         try {
-            // Direct physical hook into the 1080p60 capture card hardware pipeline
             stream = await navigator.mediaDevices.getUserMedia({
                 video: { width: 1920, height: 1080, frameRate: 60 },
                 audio: false
@@ -58,10 +57,9 @@
         clickTrigger.innerText = '⏹️ Stop [00:00]';
         hud.innerText = "Recording...";
 
-        // Direct handoff: No canvas layers, no arrays, just pure raw hardware data
         mediaRecorder = new MediaRecorder(stream, {
             mimeType: 'video/webm;codecs=vp8',
-            videoBitsPerSecond: 25000000 // Locked high-bitrate target
+            videoBitsPerSecond: 25000000
         });
         
         mediaRecorder.ondataavailable = (e) => {
@@ -86,8 +84,8 @@
             }, 500);
         };
 
-        // Continually stream standard data chunks straight to the file writer system
-        mediaRecorder.start(100); 
+        // Left completely empty so Chrome just pools the raw feed without interrupting the clock
+        mediaRecorder.start(); 
 
         recordingInterval = setInterval(() => {
             recordingSeconds++;
