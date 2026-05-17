@@ -182,16 +182,10 @@ const videoElement = document.getElementById('v');
     let isRecording = false;
     let stream = null;
     let audioContext = null;
-    let videoProcessor = null;
     
-    // Stable post-processing memory arrays
-    let rawFrameBuffer = []; 
-    let recordedChunks = [];
+    // Clean, native recording pools
     let mediaRecorder = null;
-    
-    // Offline rendering canvas layers
-    const offlineCanvas = document.createElement('canvas');
-    const ctx = offlineCanvas.getContext('2d');
+    let recordedChunks = [];
     
     let fadeTimeout;
     let tvBannerTimeout;
@@ -301,13 +295,45 @@ const videoElement = document.getElementById('v');
         } catch (err) { wasDisconnected = true; }
     }
 
-    async function startWebCodecsRecording() {
-        rawFrameBuffer = []; 
-        const videoTrack = stream.getVideoTracks()[0];
+    function startNativeRecording() {
+        recordedChunks = [];
         
-        videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
-        const reader = videoProcessor.readable.getReader();
-        
+        // Lock onto safe, lightweight native VP8 profile configuration at high data rates
+        const options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 25000000 };
+
+        mediaRecorder = new MediaRecorder(stream, options);
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                recordedChunks.push(e.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            hud.innerText = "⚙️ Saving Clean WebM Asset...";
+            
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'gameplay_1080p60_stable_' + Date.now() + '.webm';
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                recordedChunks = [];
+                resSelector.style.display = 'inline-block';
+                clickTrigger.innerText = "🔴 Start Recording";
+                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                resetFadeTimer();
+            }, 500);
+        };
+
+        // Standard recording start (no time-slicing to guarantee container continuity)
+        mediaRecorder.start(); 
+
         isRecording = true;
         recordingSeconds = 0;
         clickTrigger.innerText = '⏹️ Stop [00:00:00]';
@@ -318,105 +344,22 @@ const videoElement = document.getElementById('v');
             recordingSeconds++;
             clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
         }, 1000);
-
-        // SILENT FRAME HOARD LOOP: Pushes raw frames to memory with zero live CPU compression strain
-        (async function readFrames() {
-            while (isRecording) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (!isRecording) { value.close(); break; }
-                rawFrameBuffer.push(value); 
-            }
-        })();
     }
 
-    async function stopWebCodecsRecording() {
+    function stopNativeRecording() {
         isRecording = false;
         clearInterval(recordingInterval);
-        clickTrigger.innerText = "🔴 Processing...";
+        clickTrigger.innerText = "🔴 Exporting...";
         hud.classList.remove('ui-hidden');
         
-        const videoTrack = stream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
-        
-        offlineCanvas.width = settings.width;
-        offlineCanvas.height = settings.height;
-        recordedChunks = [];
-
-        // Track the flipbook canvas at 60fps
-        const canvasStream = offlineCanvas.captureStream(60);
-        
-        // Force the native encoder pipeline straight into lightweight hardware H.264 targets
-        let options = { mimeType: 'video/webm;codecs=h264', videoBitsPerSecond: 20000000 };
-        
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            options = { mimeType: 'video/mp4;codecs=avc1.4d002a', videoBitsPerSecond: 20000000 };
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
         }
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            options = { videoBitsPerSecond: 20000000 };
-        }
-
-        mediaRecorder = new MediaRecorder(canvasStream, options);
-        
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            const ext = mediaRecorder.mimeType.includes('mp4') ? '.mp4' : '.webm';
-            a.download = 'gameplay_1080p60_h264_' + Date.now() + ext;
-            
-            document.body.appendChild(a);
-            a.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                rawFrameBuffer = [];
-                recordedChunks = [];
-                resSelector.style.display = 'inline-block';
-                clickTrigger.innerText = "🔴 Start Recording";
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                resetFadeTimer();
-            }, 500);
-        };
-
-        mediaRecorder.start();
-        hud.innerText = "⚙️ Processing " + rawFrameBuffer.length + " Captured Frames...";
-
-        let index = 0;
-
-        // Sequentially stitch the buffered frames out to the hardware-accelerated recorder
-        function bakeNextFrame() {
-            if (index >= rawFrameBuffer.length) {
-                mediaRecorder.stop();
-                return;
-            }
-
-            const frame = rawFrameBuffer[index];
-            ctx.drawImage(frame, 0, 0, offlineCanvas.width, offlineCanvas.height);
-            frame.close(); // Flush frame immediately out of active system memory
-
-            if (index % 30 === 0) {
-                const pct = Math.round((index / rawFrameBuffer.length) * 100);
-                hud.innerText = "⚙️ Rendering H.264 Master: " + pct + "%";
-            }
-
-            index++;
-            setTimeout(bakeNextFrame, 16); // Balanced cadence pacing to let MediaRecorder lock the frame state
-        }
-
-        bakeNextFrame();
     }
 
     function toggleRecording() {
         if (!stream) return;
-        if (!isRecording) startWebCodecsRecording(); else stopWebCodecsRecording();
+        if (!isRecording) startNativeRecording(); else stopNativeRecording();
     }
 
     window.addEventListener('mousemove', (e) => {
