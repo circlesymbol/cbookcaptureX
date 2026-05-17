@@ -339,7 +339,6 @@ async function stopWebCodecsRecording() {
     const settings = videoTrack.getSettings();
     recordedChunks = [];
 
-    // Initialize the Hardware Encoder with real-time flag to prevent pipeline stalling
     videoEncoder = new VideoEncoder({
         output: (chunk) => {
             const buffer = new ArrayBuffer(chunk.byteLength);
@@ -352,56 +351,68 @@ async function stopWebCodecsRecording() {
         }
     });
 
-videoEncoder.configure({
-        codec: 'vp09.00.10.08',
+    videoEncoder.configure({
+        codec: 'vp09.00.10.08', 
         width: settings.width,
         height: settings.height,
-        bitrate: 14000000,
+        bitrate: 14000000, 
         framerate: 60,
-        latencyMode: 'quality',
-        hardwareAcceleration: 'prefer-software'
+        latencyMode: 'quality', 
+        hardwareAcceleration: 'prefer-software' 
     });
 
-    hud.innerText = `⚙️ Processing Video. This May Take a While.;
+    hud.innerText = "⚙️ Processing " + rawFrameBuffer.length + " Captured Frames...";
 
-    // Process frames asynchronously to let the hardware chip clear its internal queue
-    for (let i = 0; i < rawFrameBuffer.length; i++) {
-        const frame = rawFrameBuffer[i];
-        
+    // Use a clean index tracker to process frames sequentially without manual inline loops
+    let index = 0;
+    
+    function encodeNextFrame() {
+        if (index >= rawFrameBuffer.length) {
+            finalizeVideoExport();
+            return;
+        }
+
+        const frame = rawFrameBuffer[index];
         try {
-            videoEncoder.encode(frame, { keyFrame: i % 30 === 0 });
+            videoEncoder.encode(frame, { keyFrame: index % 30 === 0 });
         } catch (err) {
-            console.error("Frame encoding failed at index", i, err);
+            console.error("Frame encoding failed at index", index, err);
         }
-        
-        frame.close(); // Crucial: Instantly deletes the frame from RAM memory
-        
-        // Every 5 frames, pause for 1 millisecond to let the system bus catch up
-        if (i % 5 === 0) {
-            hud.innerText = '⚙️ Processing Archive: ' + Math.round((i / rawFrameBuffer.length) * 100) + '%';
-            await new Promise(resolve => setTimeout(resolve, 1));
+        frame.close(); // Instantly frees memory space
+
+        if (index % 30 === 0) {
+            const pct = Math.round((index / rawFrameBuffer.length) * 100);
+            hud.innerText = "⚙️ Processing Archive: " + pct + "%";
         }
+
+        index++;
+        // Schedules the next frame execution instantly on the next engine tick to bypass stalling
+        setTimeout(encodeNextFrame, 0); 
     }
 
-    await videoEncoder.flush();
-    videoEncoder.close();
+    async function finalizeVideoExport() {
+        await videoEncoder.flush();
+        videoEncoder.close();
 
-    // Compile and download the finished .mp4 file
-    const blob = new Blob(recordedChunks.map(c => c.data), { type: 'video/mp4' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `gameplay_1080p60_perfect_${Date.now()}.mp4`;
-    document.body.appendChild(a);
-    a.click();
-    
-    setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        rawFrameBuffer = []; // Clear out RAM memory cache completely
-        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-        resetFadeTimer();
-    }, 500);
+        const blob = new Blob(recordedChunks.map(c => c.data), { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gameplay_1080p60_vp9_perfect_${Date.now()}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            rawFrameBuffer = []; 
+            hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+            resetFadeTimer();
+        }, 500);
+    }
+
+    // Fire off the processing chain
+    encodeNextFrame();
 }
     function toggleRecording() {
         if (!stream) return;
