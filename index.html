@@ -329,70 +329,80 @@ const videoElement = document.getElementById('v');
         })();
     }
 
-    async function stopWebCodecsRecording() {
-        isRecording = false;
-        clearInterval(recordingInterval);
-        clickTrigger.innerText = "🔴 Processing...";
-        hud.classList.remove('ui-hidden');
-        
-        const videoTrack = stream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
-        recordedChunks = [];
+async function stopWebCodecsRecording() {
+    isRecording = false;
+    clearInterval(recordingInterval);
+    clickTrigger.innerText = "🔴 Processing...";
+    hud.classList.remove('ui-hidden');
+    
+    const videoTrack = stream.getVideoTracks()[0];
+    const settings = videoTrack.getSettings();
+    recordedChunks = [];
 
-        // 1. Initialize the Hardware Encoder AFTER the racing stress is done
-        videoEncoder = new VideoEncoder({
-            output: (chunk) => {
-                const buffer = new ArrayBuffer(chunk.byteLength);
-                chunk.copyTo(buffer);
-                recordedChunks.push({ data: buffer, timestamp: chunk.timestamp });
-            },
-            error: (e) => console.error(e)
-        });
-
-        videoEncoder.configure({
-            codec: 'avc1.42E02A', // H.264 Baseline Profile Level 4.2
-            width: settings.width,
-            height: settings.height,
-            bitrate: 16000000, // Cranked up to an ultra-crisp 16 Mbps for high asset accuracy
-            framerate: 60,
-            latencyMode: 'quality', // Prioritizes clean compression logic over speed
-            hardwareAcceleration: 'prefer-hardware'
-        });
-
-        hud.innerText = `⚙️ Processing ${rawFrameBuffer.length} Captured Frames...`;
-
-        // 2. Feed the hoarded memory frames to the encoder sequentially
-        for (let i = 0; i < rawFrameBuffer.length; i++) {
-            const frame = rawFrameBuffer[i];
-            videoEncoder.encode(frame, { keyFrame: i % 30 === 0 });
-            frame.close(); // Clean up system RAM frame-by-frame
-            
-            if (i % 30 === 0) {
-                hud.innerText = `⚙️ Processing Archive: ${Math.round((i / rawFrameBuffer.length) * 100)}%`;
-            }
+    // Initialize the Hardware Encoder with real-time flag to prevent pipeline stalling
+    videoEncoder = new VideoEncoder({
+        output: (chunk) => {
+            const buffer = new ArrayBuffer(chunk.byteLength);
+            chunk.copyTo(buffer);
+            recordedChunks.push({ data: buffer, timestamp: chunk.timestamp });
+        },
+        error: (e) => {
+            console.error("Encoder Error:", e);
+            hud.innerText = "⚠️ Encoder crashed! Check console.";
         }
+    });
 
-        await videoEncoder.flush();
-        videoEncoder.close();
+    videoEncoder.configure({
+        codec: 'avc1.42E02A', 
+        width: settings.width,
+        height: settings.height,
+        bitrate: 14000000, // Balanced 14 Mbps for clean tracking
+        framerate: 60,
+        latencyMode: 'realtime', // Changed back to realtime to prevent buffering freezes
+        hardwareAcceleration: 'prefer-hardware'
+    });
 
-        // 3. Compile raw hardware payload into final local download file
-        const blob = new Blob(recordedChunks.map(c => c.data), { type: 'video/mp4' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `gameplay_1080p60_perfect_${Date.now()}.mp4`;
-        document.body.appendChild(a);
-        a.click();
+    hud.innerText = `⚙️ Processing ${rawFrameBuffer.length} Captured Frames...`;
+
+    // Process frames asynchronously to let the hardware chip clear its internal queue
+    for (let i = 0; i < rawFrameBuffer.length; i++) {
+        const frame = rawFrameBuffer[i];
         
-        setTimeout(() => {
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            rawFrameBuffer = []; // Reset memory heap
-            hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-            resetFadeTimer();
-        }, 500);
+        try {
+            videoEncoder.encode(frame, { keyFrame: i % 30 === 0 });
+        } catch (err) {
+            console.error("Frame encoding failed at index", i, err);
+        }
+        
+        frame.close(); // Crucial: Instantly deletes the frame from RAM memory
+        
+        // Every 5 frames, pause for 1 millisecond to let the system bus catch up
+        if (i % 5 === 0) {
+            hud.innerText = `⚙️ Processing Archive: ${Math.round((i / rawFrameBuffer.length) * 100)}%`;
+            await new Promise(resolve => setTimeout(resolve, 1));
+        }
     }
 
+    await videoEncoder.flush();
+    videoEncoder.close();
+
+    // Compile and download the finished .mp4 file
+    const blob = new Blob(recordedChunks.map(c => c.data), { type: 'video/mp4' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gameplay_1080p60_perfect_${Date.now()}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        rawFrameBuffer = []; // Clear out RAM memory cache completely
+        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+        resetFadeTimer();
+    }, 500);
+}
     function toggleRecording() {
         if (!stream) return;
         if (!isRecording) startWebCodecsRecording(); else stopWebCodecsRecording();
