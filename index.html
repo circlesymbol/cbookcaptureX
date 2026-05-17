@@ -265,7 +265,6 @@
                 }
 
               if (!stream) {
-    // FIX: Properly extract and declare the targetVideoId from the filtered device array
     const targetVideoId = externalVideoDevices[0].deviceId;
     const selectedProfile = JSON.parse(resSelector.value);
 
@@ -383,10 +382,9 @@
                     hud.classList.add('ui-hidden');
                 });
 
-                let options = { mimeType: 'video/webm;codecs=vp9' };
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'video/webm;codecs=vp8' };
+                // DIRECT STREAM CAPTURE: Strip specific codecs to grab the direct hardware stream without re-encoding
+                mediaRecorder = new MediaRecorder(stream);
                 
-                mediaRecorder = new MediaRecorder(stream, options);
                 mediaRecorder.ondataavailable = (e) => { if (e.data?.size > 0) recordedChunks.push(e.data); };
                 mediaRecorder.onstop = () => {
                     hud.style.color = '#fff';
