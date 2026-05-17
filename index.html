@@ -151,6 +151,8 @@
         #modal-overlay.modal-active {
             opacity: 1;
             visibility: visible;
+            /* FIX: Explicitly force standard default cursor visibility across the dimming area when modal is active */
+            cursor: default !important;
         }
         #modal-box {
             background: #1e1e24;
@@ -163,6 +165,8 @@
             border: 1px solid rgba(255,255,255,0.1);
             transform: scale(0.9);
             transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            /* Reset modal content cursor to default to ensure inner text doesn't show text cursor */
+            cursor: default;
         }
         #modal-overlay.modal-active #modal-box {
             transform: scale(1);
@@ -237,11 +241,11 @@
 
     <div id="modal-overlay">
         <div id="modal-box">
-            <div id="modal-title">ℹ️ Format Note</div>
+            <div id="modal-title">ℹ️ Local Capture Format Note</div>
             <div id="modal-text">
-                This capture has been saved directly as a raw <strong>.webm</strong> file to preserve performance. 
+                Your high bit-rate gameplay footage has been saved directly as a raw <strong>.webm</strong> file to preserve performance and prevent dropped frames. 
                 <br><br>
-                You may need to convert your file into an <strong>.mp4</strong> for it to be usable with other software!
+                You may need to pass it through a media converter to transcode it into an <strong>.mp4</strong> if your editing layout or playback software requires it!
             </div>
             <button id="modal-btn">Got it, Download File</button>
         </div>
@@ -334,6 +338,9 @@
 
         async function verifyAndInitCapture() {
             try {
+                // Explicitly clear the hidden cursor class on initial connection load sequence
+                document.body.classList.remove('hide-cursor');
+
                 const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 permStream.getTracks().forEach(track => track.stop());
@@ -456,7 +463,6 @@
                         hud.style.color = '#ffaa00';
                         hud.innerText = `⚠️ Device does not support requested format! Currently Displaying: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
                         
-                        // FIX: Syncs drop-down display with actual hardware settings on fallback failure
                         for (let option of resSelector.options) {
                             const val = JSON.parse(option.value);
                             if (val.w === trueSettings.width && val.h === trueSettings.height && val.fps === roundedFrameRate) {
@@ -512,7 +518,6 @@
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     const url = URL.createObjectURL(blob);
                     
-                    // FIX: Modal intercepts file compilation loop before triggering download link
                     pendingDownloadFn = () => {
                         const a = document.createElement('a');
                         a.href = url;
@@ -529,7 +534,6 @@
                         }, 150);
                     };
 
-                    // Reveal Custom Warning Overlay Element
                     showUI();
                     modalOverlay.classList.add('modal-active');
                 };
@@ -548,7 +552,6 @@
             }
         }
 
-        // Action confirmation event for closing modal window and executing safe file extraction
         modalBtn.addEventListener('click', () => {
             modalOverlay.classList.remove('modal-active');
             if (pendingDownloadFn) {
