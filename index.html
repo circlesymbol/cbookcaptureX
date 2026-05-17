@@ -183,7 +183,6 @@
         let isRecording = false;
         let stream = null;
         
-        // FIX: Web Audio nodes saved globally to handle low-latency playback cleanly
         let audioCtx = null;
         let audioSourceNode = null;
         
@@ -240,7 +239,6 @@
             return `${hrs}:${mins}:${secs}`;
         }
 
-        // FIX: Destroys and cleans up old Web Audio context graphs during hot-plugs or resolution shifts
         function cleanupAudioPipeline() {
             if (audioSourceNode) {
                 audioSourceNode.disconnect();
@@ -258,7 +256,8 @@
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 permStream.getTracks().forEach(track => track.stop());
 
-                const videoDevices = videoDevices = devices.filter(d => d.kind === 'videoinput');
+                // FIX: Fixed initialization reference error typo here
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
                 const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
                 const externalVideoDevices = videoDevices.filter(device => {
@@ -303,7 +302,6 @@
     
     videoEl.srcObject = stream;
     
-    // FIX: Initializes ultra-low latency Web Audio API routing directly to host speakers
     cleanupAudioPipeline();
     if (stream.getAudioTracks().length > 0) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
@@ -397,7 +395,6 @@
             clearTimeout(fallbackNoticeTimeout);
             blockFadingForNotice = false;
 
-            // FIX: Ensure Web Audio is active if context fell asleep due to browser user-interaction rules
             if (audioCtx && audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
