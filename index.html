@@ -41,7 +41,7 @@
         try {
             stream = await navigator.mediaDevices.getUserMedia({
                 video: { width: 1920, height: 1080, frameRate: 60 },
-                audio: false
+                audio: true
             });
             videoElement.srcObject = stream;
             hud.innerText = "🔴 Press Button or [SPACEBAR] to Start";
@@ -57,9 +57,9 @@
         clickTrigger.innerText = '⏹️ Stop [00:00]';
         hud.innerText = "Recording...";
 
+        // Pure VP8 direct raw feed handoff—no forced bitrate overhead to choke the encoder
         mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'video/webm;codecs=vp8',
-            videoBitsPerSecond: 25000000
+            mimeType: 'video/webm;codecs=vp8'
         });
         
         mediaRecorder.ondataavailable = (e) => {
