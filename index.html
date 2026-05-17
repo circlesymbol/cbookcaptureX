@@ -184,10 +184,10 @@ const videoElement = document.getElementById('v');
     let audioContext = null;
     let videoProcessor = null;
     
-    // Post-Process Memory and Encoding Pools
+    // Memory pools and encoders for high-fidelity post-processing
     let videoEncoder = null;
     let recordedChunks = [];
-    let rawFrameBuffer = []; // Holds uncompressed frames during the race
+    let rawFrameBuffer = []; 
     
     let fadeTimeout;
     let tvBannerTimeout;
@@ -259,7 +259,7 @@ const videoElement = document.getElementById('v');
                         deviceId: targetVideoId,
                         width: { exact: selectedProfile.w }, 
                         height: { exact: selectedProfile.h }, 
-                        frameRate: { exact: selectedProfile.fps }, // True uncompromised 1080p60 input
+                        frameRate: { exact: selectedProfile.fps },
                         latencyMode: 'low' 
                     },
                     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 }
@@ -298,122 +298,130 @@ const videoElement = document.getElementById('v');
     }
 
     async function startWebCodecsRecording() {
-        rawFrameBuffer = []; // Wipe clean before starting
+        rawFrameBuffer = []; 
         const videoTrack = stream.getVideoTracks()[0];
         
-        // Setup the framework to read raw incoming stream frames instantly
         videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
         const reader = videoProcessor.readable.getReader();
         
         isRecording = true;
         recordingSeconds = 0;
-        clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
+        clickTrigger.innerText = '⏹️ Stop [00:00:00]';
         resSelector.style.display = 'none';
         hud.classList.add('ui-hidden');
 
         recordingInterval = setInterval(() => {
             recordingSeconds++;
-            clickTrigger.innerText = `⏹️ Stop [${formatTimeString(recordingSeconds)}]`;
+            clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
         }, 1000);
 
-        // ZERO-CPU CAPTURE LOOP: Clones raw frames directly into memory, skipping real-time encoding math
+        // HOARDING LOOP: Pulls uncompressed layout frames directly into system RAM memory
         (async function readFrames() {
             while (isRecording) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 if (!isRecording) { value.close(); break; }
-                
-                // Keep the raw image frame in RAM buffer
                 rawFrameBuffer.push(value); 
             }
         })();
     }
 
-async function stopWebCodecsRecording() {
-    isRecording = false;
-    clearInterval(recordingInterval);
-    clickTrigger.innerText = "🔴 Processing...";
-    hud.classList.remove('ui-hidden');
-    
-    const videoTrack = stream.getVideoTracks()[0];
-    const settings = videoTrack.getSettings();
-    recordedChunks = [];
-
-    videoEncoder = new VideoEncoder({
-        output: (chunk) => {
-            const buffer = new ArrayBuffer(chunk.byteLength);
-            chunk.copyTo(buffer);
-            recordedChunks.push({ data: buffer, timestamp: chunk.timestamp });
-        },
-        error: (e) => {
-            console.error("Encoder Error:", e);
-            hud.innerText = "⚠️ Encoder crashed! Check console.";
-        }
-    });
-
-    videoEncoder.configure({
-        codec: 'vp09.00.10.08', 
-        width: settings.width,
-        height: settings.height,
-        bitrate: 14000000, 
-        framerate: 60,
-        latencyMode: 'quality', 
-        hardwareAcceleration: 'prefer-software' 
-    });
-
-    hud.innerText = "⚙️ Processing " + rawFrameBuffer.length + " Captured Frames...";
-
-    // Use a clean index tracker to process frames sequentially without manual inline loops
-    let index = 0;
-    
-    function encodeNextFrame() {
-        if (index >= rawFrameBuffer.length) {
-            finalizeVideoExport();
-            return;
-        }
-
-        const frame = rawFrameBuffer[index];
-        try {
-            videoEncoder.encode(frame, { keyFrame: index % 30 === 0 });
-        } catch (err) {
-            console.error("Frame encoding failed at index", index, err);
-        }
-        frame.close(); // Instantly frees memory space
-
-        if (index % 30 === 0) {
-            const pct = Math.round((index / rawFrameBuffer.length) * 100);
-            hud.innerText = "⚙️ Processing Archive: " + pct + "%";
-        }
-
-        index++;
-        // Schedules the next frame execution instantly on the next engine tick to bypass stalling
-        setTimeout(encodeNextFrame, 0); 
-    }
-
-    async function finalizeVideoExport() {
-        await videoEncoder.flush();
-        videoEncoder.close();
-
-        const blob = new Blob(recordedChunks.map(c => c.data), { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `gameplay_1080p60_vp9_perfect_${Date.now()}.webm`;
-        document.body.appendChild(a);
-        a.click();
+    async function stopWebCodecsRecording() {
+        isRecording = false;
+        clearInterval(recordingInterval);
+        clickTrigger.innerText = "🔴 Processing...";
+        hud.classList.remove('ui-hidden');
         
-        setTimeout(() => {
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            rawFrameBuffer = []; 
-            hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-            resetFadeTimer();
-        }, 500);
+        const videoTrack = stream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        recordedChunks = [];
+
+        // Setup the software VP9 configuration context to handle raw sequential assets
+        videoEncoder = new VideoEncoder({
+            output: (chunk) => {
+                const buffer = new ArrayBuffer(chunk.byteLength);
+                chunk.copyTo(buffer);
+                recordedChunks.push({ data: buffer, timestamp: chunk.timestamp });
+            },
+            error: (e) => {
+                console.error("Encoder Error:", e);
+                hud.innerText = "⚠️ Encoder crashed! Check console.";
+            }
+        });
+
+        videoEncoder.configure({
+            codec: 'vp09.00.10.08', 
+            width: settings.width,
+            height: settings.height,
+            bitrate: 16000000, 
+            framerate: 60,
+            latencyMode: 'quality', 
+            hardwareAcceleration: 'prefer-software' 
+        });
+
+        hud.innerText = "⚙️ Processing " + rawFrameBuffer.length + " Captured Frames...";
+
+        let index = 0;
+        
+        // Recursive loop that straightens out the timeline and processes each frame sequentially
+        function encodeNextFrame() {
+            if (index >= rawFrameBuffer.length) {
+                finalizeVideoExport();
+                return;
+            }
+
+            const originalFrame = rawFrameBuffer[index];
+            
+            try {
+                // Microsecond timeline reconstruction: 1,000,000us / 60fps = ~16,666us delta per frame
+                const perfectTimestamp = Math.round(index * (1000000 / 60));
+                const fixedFrame = new VideoFrame(originalFrame, { timestamp: perfectTimestamp });
+                
+                videoEncoder.encode(fixedFrame, { keyFrame: index % 30 === 0 });
+                fixedFrame.close(); 
+            } catch (err) {
+                console.error("Frame encoding failed at index", index, err);
+            }
+            
+            originalFrame.close(); 
+
+            if (index % 30 === 0) {
+                const pct = Math.round((index / rawFrameBuffer.length) * 100);
+                hud.innerText = "⚙️ Processing VP9 Archive: " + pct + "%";
+            }
+
+            index++;
+            // Yield execution instantly back to Chrome thread to keep UI elements alive
+            setTimeout(encodeNextFrame, 0); 
+        }
+
+        async function finalizeVideoExport() {
+            await videoEncoder.flush();
+            videoEncoder.close();
+
+            const blob = new Blob(recordedChunks.map(c => c.data), { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'gameplay_1080p60_vp9_perfect_' + Date.now() + '.webm';
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                rawFrameBuffer = []; 
+                resSelector.style.display = 'inline-block';
+                clickTrigger.innerText = "🔴 Start Recording";
+                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                resetFadeTimer();
+            }, 500);
+        }
+
+        // Fire the processing track
+        encodeNextFrame();
     }
 
-    // Fire off the processing chain
-    encodeNextFrame();
-}
     function toggleRecording() {
         if (!stream) return;
         if (!isRecording) startWebCodecsRecording(); else stopWebCodecsRecording();
