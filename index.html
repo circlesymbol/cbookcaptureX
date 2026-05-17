@@ -90,6 +90,7 @@
         }
         #click-trigger:hover {
             background: #e60000;
+            opacity: 1.0 !important; /* Forces full visibility on hover regardless of recording state */
         }
 
         /* OSD Banner */
@@ -204,6 +205,9 @@
             visibility: hidden !important;
             pointer-events: none !important;
         }
+        .ui-low-opacity {
+            opacity: 0.15 !important; /* Keeps timestamp barely visible during idle recording status */
+        }
         .hide-cursor {
             cursor: none !important;
         }
@@ -299,6 +303,7 @@
             hud.classList.remove('ui-hidden');
             resSelector.classList.remove('ui-hidden');
             clickTrigger.classList.remove('ui-hidden');
+            clickTrigger.classList.remove('ui-low-opacity');
             document.body.classList.remove('hide-cursor');
         }
 
@@ -306,16 +311,17 @@
             if (isStartingRecording || isRecording) {
                 hud.classList.add('ui-hidden');
                 resSelector.classList.add('ui-hidden');
+                // Instead of completely hiding the record button, drop it to low opacity
                 clickTrigger.classList.remove('ui-hidden');
+                clickTrigger.classList.add('ui-low-opacity');
             } else {
                 hud.classList.add('ui-hidden');
                 resSelector.classList.add('ui-hidden');
                 clickTrigger.classList.add('ui-hidden');
+                clickTrigger.classList.remove('ui-low-opacity');
             }
-            // Hide the cursor during recording if mouse is still
-            if (isRecording) {
-                document.body.classList.add('hide-cursor');
-            } else if (!isStartingRecording) {
+            
+            if (isRecording || !isStartingRecording) {
                 document.body.classList.add('hide-cursor');
             }
         }
@@ -519,6 +525,7 @@
                     hud.classList.add('ui-hidden');
                     resSelector.classList.add('ui-hidden');
                     clickTrigger.classList.remove('ui-hidden');
+                    clickTrigger.classList.remove('ui-low-opacity');
                 });
 
                 clearTimeout(fadeTimeout);
