@@ -182,12 +182,10 @@ const videoElement = document.getElementById('v');
     let isRecording = false;
     let stream = null;
     let audioContext = null;
-    let videoProcessor = null;
     
-    // Memory pools and encoders for high-fidelity post-processing
-    let videoEncoder = null;
+    // Stable native recording pools
+    let mediaRecorder = null;
     let recordedChunks = [];
-    let rawFrameBuffer = []; 
     
     let fadeTimeout;
     let tvBannerTimeout;
@@ -220,7 +218,7 @@ const videoElement = document.getElementById('v');
         const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
         const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
         const secs = (totalSeconds % 60).toString().padStart(2, '0');
-        return `${hrs}:${mins}:${secs}`;
+        return hrs + ':' + mins + ':' + secs;
     }
     
     async function verifyAndInitCapture() {
@@ -288,7 +286,7 @@ const videoElement = document.getElementById('v');
                     setTimeout(() => {
                         const settings = stream.getVideoTracks()[0].getSettings();
                         tvInputTitle.innerText = externalVideoDevices[0].label;
-                        tvInputSpecs.innerText = `${settings.width} × ${settings.height} @ ${Math.round(settings.frameRate)}Hz`;
+                        tvInputSpecs.innerText = settings.width + ' × ' + settings.height + ' @ ' + Math.round(settings.frameRate) + 'Hz';
                         tvBanner.classList.add('banner-active');
                         setTimeout(() => tvBanner.classList.remove('banner-active'), 4000);
                     }, 500);
@@ -297,13 +295,49 @@ const videoElement = document.getElementById('v');
         } catch (err) { wasDisconnected = true; }
     }
 
-    async function startWebCodecsRecording() {
-        rawFrameBuffer = []; 
-        const videoTrack = stream.getVideoTracks()[0];
+    function startNativeRecording() {
+        recordedChunks = [];
         
-        videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
-        const reader = videoProcessor.readable.getReader();
-        
+        // Pick the best available VP9 profile container configuration
+        let options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 16000000 };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            // Fallback just in case Chrome OS limits sub-profiles
+            options = { mimeType: 'video/webm', videoBitsPerSecond: 16000000 };
+        }
+
+        mediaRecorder = new MediaRecorder(stream, options);
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                recordedChunks.push(e.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            hud.innerText = "⚙️ Finalizing VP9 File structure...";
+            
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'gameplay_1080p60_vp9_' + Date.now() + '.webm';
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                recordedChunks = [];
+                resSelector.style.display = 'inline-block';
+                clickTrigger.innerText = "🔴 Start Recording";
+                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                resetFadeTimer();
+            }, 500);
+        };
+
+        // Request data chunks every 1 second to keep memory allocations stable
+        mediaRecorder.start(1000); 
+
         isRecording = true;
         recordingSeconds = 0;
         clickTrigger.innerText = '⏹️ Stop [00:00:00]';
@@ -314,117 +348,22 @@ const videoElement = document.getElementById('v');
             recordingSeconds++;
             clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
         }, 1000);
-
-        // HOARDING LOOP: Pulls uncompressed layout frames directly into system RAM memory
-        (async function readFrames() {
-            while (isRecording) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (!isRecording) { value.close(); break; }
-                rawFrameBuffer.push(value); 
-            }
-        })();
     }
 
-    async function stopWebCodecsRecording() {
+    function stopNativeRecording() {
         isRecording = false;
         clearInterval(recordingInterval);
-        clickTrigger.innerText = "🔴 Processing...";
+        clickTrigger.innerText = "🔴 Saving File...";
         hud.classList.remove('ui-hidden');
         
-        const videoTrack = stream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
-        recordedChunks = [];
-
-        // Setup the software VP9 configuration context to handle raw sequential assets
-        videoEncoder = new VideoEncoder({
-            output: (chunk) => {
-                const buffer = new ArrayBuffer(chunk.byteLength);
-                chunk.copyTo(buffer);
-                recordedChunks.push({ data: buffer, timestamp: chunk.timestamp });
-            },
-            error: (e) => {
-                console.error("Encoder Error:", e);
-                hud.innerText = "⚠️ Encoder crashed! Check console.";
-            }
-        });
-
-        videoEncoder.configure({
-            codec: 'vp09.00.10.08', 
-            width: settings.width,
-            height: settings.height,
-            bitrate: 16000000, 
-            framerate: 60,
-            latencyMode: 'quality', 
-            hardwareAcceleration: 'prefer-software' 
-        });
-
-        hud.innerText = "⚙️ Processing " + rawFrameBuffer.length + " Captured Frames...";
-
-        let index = 0;
-        
-        // Recursive loop that straightens out the timeline and processes each frame sequentially
-        function encodeNextFrame() {
-            if (index >= rawFrameBuffer.length) {
-                finalizeVideoExport();
-                return;
-            }
-
-            const originalFrame = rawFrameBuffer[index];
-            
-            try {
-                // Microsecond timeline reconstruction: 1,000,000us / 60fps = ~16,666us delta per frame
-                const perfectTimestamp = Math.round(index * (1000000 / 60));
-                const fixedFrame = new VideoFrame(originalFrame, { timestamp: perfectTimestamp });
-                
-                videoEncoder.encode(fixedFrame, { keyFrame: index % 30 === 0 });
-                fixedFrame.close(); 
-            } catch (err) {
-                console.error("Frame encoding failed at index", index, err);
-            }
-            
-            originalFrame.close(); 
-
-            if (index % 30 === 0) {
-                const pct = Math.round((index / rawFrameBuffer.length) * 100);
-                hud.innerText = "⚙️ Processing VP9 Archive: " + pct + "%";
-            }
-
-            index++;
-            // Yield execution instantly back to Chrome thread to keep UI elements alive
-            setTimeout(encodeNextFrame, 0); 
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
         }
-
-        async function finalizeVideoExport() {
-            await videoEncoder.flush();
-            videoEncoder.close();
-
-            const blob = new Blob(recordedChunks.map(c => c.data), { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'gameplay_1080p60_vp9_perfect_' + Date.now() + '.webm';
-            document.body.appendChild(a);
-            a.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                rawFrameBuffer = []; 
-                resSelector.style.display = 'inline-block';
-                clickTrigger.innerText = "🔴 Start Recording";
-                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
-                resetFadeTimer();
-            }, 500);
-        }
-
-        // Fire the processing track
-        encodeNextFrame();
     }
 
     function toggleRecording() {
         if (!stream) return;
-        if (!isRecording) startWebCodecsRecording(); else stopWebCodecsRecording();
+        if (!isRecording) startNativeRecording(); else stopNativeRecording();
     }
 
     window.addEventListener('mousemove', (e) => {
