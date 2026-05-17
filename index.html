@@ -2,289 +2,442 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gameplay Capture Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>60fps Local Web Capture</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
-            background: #111;
-            color: #fff;
-            font-family: sans-serif;
             margin: 0;
             padding: 0;
             overflow: hidden;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+        }
+        #v {
             width: 100vw;
             height: 100vh;
-        }
-        #video-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: #000;
-        }
-        video {
-            width: 100%;
-            height: 100%;
             object-fit: contain;
+            display: block;
         }
-        #ui-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            transition: opacity 0.5s ease;
+        
+        /* Controls Layout */
+        #hud, #controls-wrapper {
+            position: fixed;
+            z-index: 999999;
+            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
             opacity: 1;
+            visibility: visible;
         }
-        .interactive {
-            pointer-events: auto;
-        }
+
         #hud {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            border: 1px solid #333;
-            display: none;
-            z-index: 10;
-            white-space: nowrap;
-        }
-        #controls-panel {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(20, 20, 20, 0.85);
-            padding: 16px 28px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            border: 1px solid #444;
-            backdrop-filter: blur(10px);
-            z-index: 10;
-        }
-        button {
-            background: #ff3333;
-            color: white;
-            border: none;
-            padding: 12px 28px;
-            font-size: 1rem;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-        }
-        button:hover {
-            background: #cc0000;
-        }
-        button:active {
-            transform: scale(0.98);
-        }
-        select {
-            background: #222;
+            top: 15px;
+            left: 15px;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.85);
             color: #fff;
-            border: 1px solid #555;
-            padding: 10px 14px;
-            font-size: 0.95rem;
+            font-size: 14px;
+            font-weight: 500;
             border-radius: 6px;
+            pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        #controls-wrapper {
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #res-selector {
+            padding: 11px 15px;
+            background: rgba(30, 30, 30, 0.9);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
             outline: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+            transition: border-color 0.2s, background-color 0.2s;
         }
-        select:focus {
-            border-color: #ff3333;
+        #res-selector:hover {
+            background: rgba(45, 45, 45, 0.95);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+        #res-selector option {
+            background: #1e1e1e;
+            color: #fff;
+        }
+
+        #click-trigger {
+            padding: 12px 20px;
+            background: #ff3333;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+        }
+        #click-trigger:hover {
+            background: #e60000;
+        }
+
+        /* OSD Banner */
+        #tv-banner {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            background: rgba(43, 47, 54, 0.95); 
+            color: #ffffff;
+            padding: 16px 30px;
+            border-radius: 3px;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.75);
+            z-index: 1000000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+            transform: translateY(-15px);
+            opacity: 0;
+            visibility: hidden;
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s, visibility 0.35s;
+            pointer-events: none;
+            border-left: 4px solid #00E676;
+        }
+        #tv-banner.banner-active {
+            transform: translateY(0);
+            opacity: 1;
+            visibility: visible;
+        }
+        #tv-input-title {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            margin-bottom: 5px;
+            color: #ffffff;
+        }
+        #tv-input-specs {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+
+        .ui-hidden {
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+        .hide-cursor {
+            cursor: none !important;
         }
     </style>
 </head>
 <body>
 
-    <div id="video-container">
-        <video id="v" autoplay playsinline></video>
+    <video id="v" autoplay playsinline></video>
+    <div id="hud">⏳ Checking Hardware Connection...</div>
+    
+    <div id="controls-wrapper" style="display: none;">
+     <select id="res-selector">
+    <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
+    <option value='{"w":3840,"h":2160,"fps":30}'>4K Ultra HD @ 30Hz</option>
+    <option value='{"w":2560,"h":1440,"fps":60}'>1440p Quad HD @ 60Hz</option>
+    <option value='{"w":2560,"h":1440,"fps":30}'>1440p Quad HD @ 30Hz</option>
+    <option value='{"w":1920,"h":1080,"fps":60}' selected>1080p Full HD @ 60Hz</option>
+    <option value='{"w":1920,"h":1080,"fps":30}'>1080p Full HD @ 30Hz</option>
+    <option value='{"w":1360,"h":768,"fps":60}'>768p Wide-HD @ 60Hz</option>
+    <option value='{"w":1280,"h":1024,"fps":60}'>1024p SXGA @ 60Hz</option>
+    <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
+    <option value='{"w":1280,"h":720,"fps":30}'>720p HD @ 30Hz</option>
+    <option value='{"w":854,"h":480,"fps":60}'>480p ED @ 60Hz</option>
+</select>
+        <button id="click-trigger">🔴 Record</button>
     </div>
 
-    <div id="ui-overlay" class="interactive">
-        <div id="hud">🔴 Ready to Record</div>
-        <div id="controls-panel">
-            <button id="click-trigger">🔴 Start Recording</button>
-            <select id="res-selector">
-                <option value='{"w":1920,"h":1080,"fps":60}'>1080p Full HD @ 60Hz</option>
-                <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
-                <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
-            </select>
-        </div>
+    <div id="tv-banner">
+        <div id="tv-input-title">DETECTING DEVICE...</div>
+        <div id="tv-input-specs">0x0 @ 0Hz</div>
     </div>
 
-<script>
-    const videoElement = document.getElementById('v');
-    const uiOverlay = document.getElementById('ui-overlay');
-    const hud = document.getElementById('hud');
-    const clickTrigger = document.getElementById('click-trigger');
-    const resSelector = document.getElementById('res-selector');
-    
-    let isRecording = false;
-    let stream = null;
-    let mediaRecorder = null;
-    let recordedChunks = [];
+    <script>
+        const videoEl = document.getElementById('v');
+        const hud = document.getElementById('hud');
+        const controlsWrapper = document.getElementById('controls-wrapper');
+        const resSelector = document.getElementById('res-selector');
+        const clickTrigger = document.getElementById('click-trigger');
+        const tvBanner = document.getElementById('tv-banner');
+        const tvInputTitle = document.getElementById('tv-input-title');
+        const tvInputSpecs = document.getElementById('tv-input-specs');
+        
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
+        let stream = null;
+        
+        let fadeTimeout;
+        let tvBannerTimeout;
+        let fallbackNoticeTimeout;
+        
+        let recordingSeconds = 0;
+        let recordingInterval = null;
+        
+        let lastX = 0;
+        let lastY = 0;
+        const movementThreshold = 10;
+        
+        let wasDisconnected = true;
+        let allowUIFading = false;
+        let blockFadingForNotice = false;
 
-    let recordingSeconds = 0;
-    let recordingInterval = null;
-    
-    let fadeTimeout = null;
-    let blockFadingForNotice = false;
-
-    function formatTimeString(totalSeconds) {
-        const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-        const secs = (totalSeconds % 60).toString().padStart(2, '0');
-        return mins + ':' + secs;
-    }
-
-    function showUI() {
-        uiOverlay.style.opacity = '1';
-        uiOverlay.classList.add('interactive');
-        clearTimeout(fadeTimeout);
-        if (!isRecording && !blockFadingForNotice) {
-            fadeTimeout = setTimeout(hideUI, 3000);
-        }
-    }
-
-    function hideUI() {
-        if (isRecording || blockFadingForNotice) return;
-        uiOverlay.style.opacity = '0';
-        uiOverlay.classList.remove('interactive');
-    }
-
-    window.addEventListener('mousemove', showUI);
-    window.addEventListener('click', showUI);
-
-    async function applyCaptureSettings() {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-
-        const requested = JSON.parse(resSelector.value);
-        blockFadingForNotice = false;
-        hud.style.display = 'none';
-
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    width: { ideal: requested.w }, 
-                    height: { ideal: requested.h }, 
-                    frameRate: { ideal: requested.fps } 
-                },
-                audio: {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false
-                }
-            });
-            
-            videoElement.srcObject = stream;
-
-            const videoTrack = stream.getVideoTracks()[0];
-            const trueSettings = videoTrack.getSettings();
-            const roundedFrameRate = Math.round(trueSettings.frameRate);
-
-            if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
-                blockFadingForNotice = true;
-                showUI();
-                
-                hud.style.display = 'block';
-                hud.style.color = '#ffaa00';
-                hud.innerText = `⚠️ Device does not support requested format! Fallback: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
-                
-                // FIX: Force the dropdown selection menu to snap back to the actual fallback mode
-                resSelector.value = JSON.stringify({ w: trueSettings.width, h: trueSettings.height, fps: roundedFrameRate });
-            }
-            
-        } catch (err) {
-            blockFadingForNotice = true;
+        function resetFadeTimer() {
+            if (blockFadingForNotice) return;
             showUI();
-            hud.style.display = 'block';
-            hud.style.color = '#ff3333';
-            hud.innerText = "⚠️ Error accessing hardware capture pipeline.";
+            clearTimeout(fadeTimeout);
+            if (allowUIFading) {
+                fadeTimeout = setTimeout(hideUI, 3000);
+            }
         }
+
+        function showUI() {
+            if (!isRecording) hud.classList.remove('ui-hidden');
+            if (controlsWrapper.style.display !== 'none') controlsWrapper.classList.remove('ui-hidden');
+            document.body.classList.remove('hide-cursor');
+        }
+
+        function hideUI() {
+            hud.classList.add('ui-hidden');
+            controlsWrapper.classList.add('ui-hidden');
+            document.body.classList.add('hide-cursor');
+        }
+
+        function triggerTVBanner(rawDeviceName, width, height, fps) {
+            clearTimeout(tvBannerTimeout);
+            tvInputTitle.innerText = rawDeviceName;
+            tvInputSpecs.innerText = `${width} × ${height} @ ${fps}Hz`;
+            tvBanner.classList.add('banner-active');
+            tvBannerTimeout = setTimeout(() => {
+                tvBanner.classList.remove('banner-active');
+            }, 4000);
+        }
+
+        function formatTimeString(totalSeconds) {
+            const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+            const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+            const secs = (totalSeconds % 60).toString().padStart(2, '0');
+            return `${hrs}:${mins}:${secs}`;
+        }
+
+        async function verifyAndInitCapture() {
+            try {
+                const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                permStream.getTracks().forEach(track => track.stop());
+
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                const audioDevices = devices.filter(d => d.kind === 'audioinput');
+
+                const externalVideoDevices = videoDevices.filter(device => {
+                    const label = device.label.toLowerCase();
+                    return !label.includes('integrated') && !label.includes('internal') && !label.includes('front') && !label.includes('webcam');
+                });
+
+                if (externalVideoDevices.length === 0) {
+                    allowUIFading = false;
+                    clearInterval(recordingInterval);
+                    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+                    controlsWrapper.style.display = 'none';
+                    hud.style.display = 'block';
+                    videoEl.srcObject = null;
+                    hud.innerText = "⚠️ No Capture Card Detected! Please Check USB Connection!";
+                    hud.style.color = '#ffaa00';
+                    wasDisconnected = true;
+                    showUI();
+                    return;
+                }
+
+              if (!stream) {
+    // FIX: Properly extract and declare the targetVideoId from the filtered device array
+    const targetVideoId = externalVideoDevices[0].deviceId;
+    const selectedProfile = JSON.parse(resSelector.value);
+
+    let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+    const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
+    if (externalAudioDevices.length > 0) {
+        audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
     }
 
-    function startRecording() {
-        recordedChunks = [];
-        isRecording = true;
-        recordingSeconds = 0;
-        clickTrigger.innerText = '⏹️ Stop [00:00]';
-        
-        blockFadingForNotice = false;
-        hud.style.display = 'block';
-        hud.style.color = '#ff3333';
-        hud.innerText = "🔴 RECORDING LIVE";
-        resSelector.style.display = 'none';
+    stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+            deviceId: targetVideoId,
+            width: { ideal: selectedProfile.w }, 
+            height: { ideal: selectedProfile.h }, 
+            frameRate: { ideal: selectedProfile.fps } 
+        },
+        audio: audioConstraint
+    });
+    videoEl.srcObject = stream;
+}
 
-        mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'video/webm;codecs=vp8'
+                controlsWrapper.style.display = 'flex';
+                if (!isRecording && !blockFadingForNotice) {
+                    hud.style.display = 'block';
+                    hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                    hud.style.color = '#fff';
+                }
+                allowUIFading = true;
+                resetFadeTimer();
+
+                if (wasDisconnected && stream) {
+                    wasDisconnected = false;
+                    await new Promise(r => setTimeout(r, 500));
+                    updateOSD(externalVideoDevices[0].label);
+                }
+            } catch (err) {
+                console.error(err);
+                wasDisconnected = true;
+            }
+        }
+
+        function updateOSD(deviceLabel) {
+            const videoTrack = stream?.getVideoTracks()[0];
+            if (videoTrack) {
+                const settings = videoTrack.getSettings();
+                triggerTVBanner(
+                    deviceLabel || "USB Capture Card", 
+                    settings.width || 1280, 
+                    settings.height || 720, 
+                    Math.round(settings.frameRate || 60)
+                );
+                return settings;
+            }
+            return null;
+        }
+
+        resSelector.addEventListener('change', async () => {
+            const videoTrack = stream?.getVideoTracks()[0];
+            if (!videoTrack) return;
+
+            clearTimeout(fallbackNoticeTimeout);
+            blockFadingForNotice = false;
+
+            try {
+                const requested = JSON.parse(resSelector.value);
+                
+                await videoTrack.applyConstraints({
+                    width: { ideal: requested.w },
+                    height: { ideal: requested.h },
+                    frameRate: { ideal: requested.fps }
+                });
+                
+                await new Promise(r => setTimeout(r, 250));
+                const trueSettings = updateOSD("Updated Resolution");
+
+                if (trueSettings) {
+                    const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
+                    
+                    if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
+                        blockFadingForNotice = true;
+                        showUI();
+                        
+                        hud.style.display = 'block';
+                        hud.style.color = '#ffaa00';
+                        hud.innerText = `⚠️ Device does not support requested format! Currently Displaying: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
+                        
+                        fallbackNoticeTimeout = setTimeout(() => {
+                            blockFadingForNotice = false;
+                            if (!isRecording) {
+                                hud.style.color = '#fff';
+                                hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                            }
+                            resetFadeTimer();
+                        }, 5000);
+                    }
+                }
+            } catch (err) {
+                console.error("Mode switch rejected by hardware:", err);
+            }
         });
-        
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-        };
 
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'gameplay_capture_' + Date.now() + '.webm';
-            document.body.appendChild(a);
-            a.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
+        function toggleRecording() {
+            if (!stream) return;
+            clearTimeout(fallbackNoticeTimeout);
+            blockFadingForNotice = false;
+
+            if (!isRecording) {
+                isRecording = true;
                 recordedChunks = [];
-                clickTrigger.innerText = "🔴 Start Recording";
-                resSelector.style.display = 'inline-block';
-                applyCaptureSettings();
-            }, 500);
+                recordingSeconds = 0;
+
+                requestAnimationFrame(() => {
+                    clickTrigger.innerText = `⏹️ Stop [00:00:00]`;
+                    resSelector.style.display = 'none';
+                    hud.classList.add('ui-hidden');
+                });
+
+                let options = { mimeType: 'video/webm;codecs=vp9' };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'video/webm;codecs=vp8' };
+                
+                mediaRecorder = new MediaRecorder(stream, options);
+                mediaRecorder.ondataavailable = (e) => { if (e.data?.size > 0) recordedChunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    hud.style.color = '#fff';
+                    hud.style.display = 'block';
+                    resSelector.style.display = 'block';
+                    hud.innerText = "⏳ Processing Video...";
+                    
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const settings = stream.getVideoTracks()[0]?.getSettings();
+                    a.download = `gameplay_${settings?.height || 720}p${Math.round(settings?.frameRate || 60)}_${Date.now()}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        hud.innerText = "🔴 Press [SPACEBAR] to Start Recording";
+                        resetFadeTimer();
+                    }, 150);
+                };
+
+                mediaRecorder.start(100);
+                recordingInterval = setInterval(() => {
+                    recordingSeconds++;
+                    clickTrigger.innerText = `⏹️ Stop [${formatTimeString(recordingSeconds)}]`;
+                }, 1000);
+            } else {
+                clearInterval(recordingInterval);
+                mediaRecorder.stop();
+                isRecording = false;
+                clickTrigger.innerText = "🔴 Record";
+                resetFadeTimer();
+            }
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (Math.abs(e.clientX - lastX) > movementThreshold || Math.abs(e.clientY - lastY) > movementThreshold) resetFadeTimer();
+            lastX = e.clientX; lastY = e.clientY;
+        });
+        window.addEventListener('touchstart', resetFadeTimer);
+        window.onkeydown = (e) => {
+            if (controlsWrapper.style.display === 'none') return;
+            if (e.code === 'Space') { e.preventDefault(); toggleRecording(); } else { resetFadeTimer(); }
         };
-
-        mediaRecorder.start(); 
-
-        recordingInterval = setInterval(() => {
-            recordingSeconds++;
-            clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
-        }, 1000);
-    }
-
-    function stopRecording() {
-        isRecording = false;
-        clearInterval(recordingInterval);
-        clickTrigger.innerText = "💾 Saving File...";
-        hud.innerText = "⏳ Processing final video file container...";
-        mediaRecorder.stop();
-    }
-
-    function toggleCapture() {
-        if (!stream) return;
-        if (!isRecording) startRecording(); else stopRecording();
-    }
-
-    window.onkeydown = (e) => { 
-        if (e.code === 'Space') { 
-            e.preventDefault(); 
-            toggleCapture(); 
-        } 
-    };
-    
-    clickTrigger.addEventListener('click', toggleCapture);
-    resSelector.addEventListener('change', applyCaptureSettings);
-    window.addEventListener('DOMContentLoaded', applyCaptureSettings);
-</script>
+        clickTrigger.addEventListener('click', (e) => { e.blur(); toggleRecording(); });
+        navigator.mediaDevices.addEventListener('devicechange', () => { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } verifyAndInitCapture(); });
+        window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
+    </script>
 </body>
 </html>
