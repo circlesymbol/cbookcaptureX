@@ -25,15 +25,8 @@
     
     let isRecording = false;
     let stream = null;
-    let videoProcessor = null;
-    
-    let frameStorageBuffer = []; 
+    let mediaRecorder = null;
     let recordedChunks = [];
-    
-    const offlineCanvas = document.createElement('canvas');
-    const ctx = offlineCanvas.getContext('2d');
-    offlineCanvas.width = 1920;  // Kept your 1080p canvas scale
-    offlineCanvas.height = 1080;
 
     let recordingSeconds = 0;
     let recordingInterval = null;
@@ -46,6 +39,7 @@
     
     async function initCapture() {
         try {
+            // Direct physical hook into the 1080p60 capture card hardware pipeline
             stream = await navigator.mediaDevices.getUserMedia({
                 video: { width: 1920, height: 1080, frameRate: 60 },
                 audio: false
@@ -57,45 +51,17 @@
         }
     }
 
-    async function startFrameHoard() {
-        frameStorageBuffer = []; 
-        const videoTrack = stream.getVideoTracks()[0];
-        
-        videoProcessor = new MediaStreamTrackProcessor({ track: videoTrack });
-        const reader = videoProcessor.readable.getReader();
-        
+    function startRecording() {
+        recordedChunks = [];
         isRecording = true;
         recordingSeconds = 0;
         clickTrigger.innerText = '⏹️ Stop [00:00]';
         hud.innerText = "Recording...";
 
-        recordingInterval = setInterval(() => {
-            recordingSeconds++;
-            clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
-        }, 1000);
-
-        (async function hoard() {
-            while (isRecording) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (!isRecording) { value.close(); break; }
-                frameStorageBuffer.push(value); 
-            }
-        })();
-    }
-
-    async function stopAndBake() {
-        isRecording = false;
-        clearInterval(recordingInterval);
-        clickTrigger.innerText = "💾 Saving File...";
-        hud.innerText = "Processing frames...";
-
-        recordedChunks = [];
-        const canvasStream = offlineCanvas.captureStream(60);
-        
-        const mediaRecorder = new MediaRecorder(canvasStream, {
+        // Direct handoff: No canvas layers, no arrays, just pure raw hardware data
+        mediaRecorder = new MediaRecorder(stream, {
             mimeType: 'video/webm;codecs=vp8',
-            videoBitsPerSecond: 25000000
+            videoBitsPerSecond: 25000000 // Locked high-bitrate target
         });
         
         mediaRecorder.ondataavailable = (e) => {
@@ -107,48 +73,39 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'gameplay_1080p60_stable_' + Date.now() + '.webm';
+            a.download = 'gameplay_1080p60_' + Date.now() + '.webm';
             document.body.appendChild(a);
             a.click();
             
             setTimeout(() => {
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
-                frameStorageBuffer = [];
+                recordedChunks = [];
                 clickTrigger.innerText = "🔴 Start Recording";
                 hud.innerText = "🔴 Press Button or [SPACEBAR] to Start";
             }, 500);
         };
 
-        mediaRecorder.start();
+        // Continually stream standard data chunks straight to the file writer system
+        mediaRecorder.start(100); 
 
-        let currentFrameIndex = 0;
+        recordingInterval = setInterval(() => {
+            recordingSeconds++;
+            clickTrigger.innerText = '⏹️ Stop [' + formatTimeString(recordingSeconds) + ']';
+        }, 1000);
+    }
 
-        function bakeFrame() {
-            if (currentFrameIndex >= frameStorageBuffer.length) {
-                mediaRecorder.stop();
-                return;
-            }
-
-            const videoFrame = frameStorageBuffer[currentFrameIndex];
-            ctx.drawImage(videoFrame, 0, 0, offlineCanvas.width, offlineCanvas.height);
-            videoFrame.close(); 
-
-            if (currentFrameIndex % 30 === 0) {
-                const percentage = Math.round((currentFrameIndex / frameStorageBuffer.length) * 100);
-                hud.innerText = "Baking Video: " + percentage + "%";
-            }
-
-            currentFrameIndex++;
-            setTimeout(bakeFrame, 16); 
-        }
-
-        bakeFrame();
+    function stopRecording() {
+        isRecording = false;
+        clearInterval(recordingInterval);
+        clickTrigger.innerText = "💾 Saving File...";
+        hud.innerText = "Processing final webm...";
+        mediaRecorder.stop();
     }
 
     function toggleCapture() {
         if (!stream) return;
-        if (!isRecording) startFrameHoard(); else stopAndBake();
+        if (!isRecording) startRecording(); else stopRecording();
     }
 
     window.onkeydown = (e) => { if (e.code === 'Space') { e.preventDefault(); toggleCapture(); } };
