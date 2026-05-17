@@ -143,7 +143,7 @@
 </head>
 <body>
 
-    <video id="v" autoplay playsinline></video>
+    <video id="v" autoplay playsinline muted></video>
     <div id="hud">⏳ Checking Hardware Connection...</div>
     
     <div id="controls-wrapper" style="display: none;">
@@ -182,6 +182,10 @@
         let recordedChunks = [];
         let isRecording = false;
         let stream = null;
+        
+        // FIX: Web Audio nodes saved globally to handle low-latency playback cleanly
+        let audioCtx = null;
+        let audioSourceNode = null;
         
         let fadeTimeout;
         let tvBannerTimeout;
@@ -236,13 +240,25 @@
             return `${hrs}:${mins}:${secs}`;
         }
 
+        // FIX: Destroys and cleans up old Web Audio context graphs during hot-plugs or resolution shifts
+        function cleanupAudioPipeline() {
+            if (audioSourceNode) {
+                audioSourceNode.disconnect();
+                audioSourceNode = null;
+            }
+            if (audioCtx && audioCtx.state !== 'closed') {
+                audioCtx.close();
+                audioCtx = null;
+            }
+        }
+
         async function verifyAndInitCapture() {
             try {
                 const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 permStream.getTracks().forEach(track => track.stop());
 
-                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                const videoDevices = videoDevices = devices.filter(d => d.kind === 'videoinput');
                 const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
                 const externalVideoDevices = videoDevices.filter(device => {
@@ -253,6 +269,7 @@
                 if (externalVideoDevices.length === 0) {
                     allowUIFading = false;
                     clearInterval(recordingInterval);
+                    cleanupAudioPipeline();
                     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
                     controlsWrapper.style.display = 'none';
                     hud.style.display = 'block';
@@ -283,7 +300,16 @@
         },
         audio: audioConstraint
     });
+    
     videoEl.srcObject = stream;
+    
+    // FIX: Initializes ultra-low latency Web Audio API routing directly to host speakers
+    cleanupAudioPipeline();
+    if (stream.getAudioTracks().length > 0) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+        audioSourceNode = audioCtx.createMediaStreamSource(stream);
+        audioSourceNode.connect(audioCtx.destination);
+    }
 }
 
                 controlsWrapper.style.display = 'flex';
@@ -371,6 +397,11 @@
             clearTimeout(fallbackNoticeTimeout);
             blockFadingForNotice = false;
 
+            // FIX: Ensure Web Audio is active if context fell asleep due to browser user-interaction rules
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
             if (!isRecording) {
                 isRecording = true;
                 recordedChunks = [];
@@ -382,7 +413,6 @@
                     hud.classList.add('ui-hidden');
                 });
 
-                // DIRECT STREAM CAPTURE: Strip specific codecs to grab the direct hardware stream without re-encoding
                 mediaRecorder = new MediaRecorder(stream);
                 
                 mediaRecorder.ondataavailable = (e) => { if (e.data?.size > 0) recordedChunks.push(e.data); };
@@ -434,7 +464,13 @@
             if (e.code === 'Space') { e.preventDefault(); toggleRecording(); } else { resetFadeTimer(); }
         };
         clickTrigger.addEventListener('click', (e) => { e.blur(); toggleRecording(); });
-        navigator.mediaDevices.addEventListener('devicechange', () => { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } verifyAndInitCapture(); });
+        
+        navigator.mediaDevices.addEventListener('devicechange', () => { 
+            cleanupAudioPipeline();
+            if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } 
+            verifyAndInitCapture(); 
+        });
+        
         window.addEventListener('DOMContentLoaded', verifyAndInitCapture);
     </script>
 </body>
