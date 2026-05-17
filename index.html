@@ -345,7 +345,7 @@
             return null;
         }
 
-        resSelector.addEventListener('change', async () => {
+  resSelector.addEventListener('change', async () => {
             const videoTrack = stream?.getVideoTracks()[0];
             if (!videoTrack) return;
 
@@ -362,7 +362,7 @@
                 });
                 
                 await new Promise(r => setTimeout(r, 250));
-                const trueSettings = updateOSD("Updated Resolution");
+                const trueSettings = updateOSD("Updated Resolution Settings");
 
                 if (trueSettings) {
                     const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
@@ -375,6 +375,15 @@
                         hud.style.color = '#ffaa00';
                         hud.innerText = `⚠️ Device does not support requested format! Currently Displaying: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
                         
+                        // FIX: Scan through the selector options and force the drop-down to match the true hardware fallback format
+                        for (let option of resSelector.options) {
+                            const val = JSON.parse(option.value);
+                            if (val.w === trueSettings.width && val.h === trueSettings.height && val.fps === roundedFrameRate) {
+                                resSelector.value = option.value;
+                                break;
+                            }
+                        }
+
                         fallbackNoticeTimeout = setTimeout(() => {
                             blockFadingForNotice = false;
                             if (!isRecording) {
