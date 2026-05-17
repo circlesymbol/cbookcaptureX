@@ -2,26 +2,133 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gameplay Capture</title>
+    <title>Gameplay Capture Dashboard</title>
     <style>
-        body { background: #111; color: #fff; font-family: sans-serif; margin: 0; padding: 20px; text-align: center; }
-        video { width: 80%; max-width: 800px; background: #000; border: 4px solid #333; border-radius: 8px; }
-        #hud { margin: 20px; font-size: 1.2rem; font-weight: bold; }
-        button { background: #ff3333; color: white; border: none; padding: 12px 24px; font-size: 1rem; font-weight: bold; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #cc0000; }
+        body {
+            background: #111;
+            color: #fff;
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #video-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            opacity: 1;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: 1px solid #333;
+            display: none;
+            z-index: 10;
+            white-space: nowrap;
+        }
+        #controls-panel {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 20, 0.85);
+            padding: 16px 28px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border: 1px solid #444;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+        button {
+            background: #ff3333;
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+        button:hover {
+            background: #cc0000;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        select {
+            background: #222;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 10px 14px;
+            font-size: 0.95rem;
+            border-radius: 6px;
+            cursor: pointer;
+            outline: none;
+        }
+        select:focus {
+            border-color: #ff3333;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Gameplay Capture</h1>
-    <video id="v" autoplay playsinline></video>
-    <div id="hud">🔴 Press Button or [SPACEBAR] to Start</div>
-    <button id="click-trigger">🔴 Start Recording</button>
+    <div id="video-container">
+        <video id="v" autoplay playsinline></video>
+    </div>
+
+    <div id="ui-overlay" class="interactive">
+        <div id="hud">🔴 Ready to Record</div>
+        <div id="controls-panel">
+            <button id="click-trigger">🔴 Start Recording</button>
+            <select id="res-selector">
+                <option value='{"w":1920,"h":1080,"fps":60}'>1080p Full HD @ 60Hz</option>
+                <option value='{"w":3840,"h":2160,"fps":60}'>4K Ultra HD @ 60Hz</option>
+                <option value='{"w":1280,"h":720,"fps":60}'>720p HD @ 60Hz</option>
+            </select>
+        </div>
+    </div>
 
 <script>
     const videoElement = document.getElementById('v');
+    const uiOverlay = document.getElementById('ui-overlay');
     const hud = document.getElementById('hud');
     const clickTrigger = document.getElementById('click-trigger');
+    const resSelector = document.getElementById('res-selector');
     
     let isRecording = false;
     let stream = null;
@@ -30,23 +137,81 @@
 
     let recordingSeconds = 0;
     let recordingInterval = null;
+    
+    let fadeTimeout = null;
+    let blockFadingForNotice = false;
 
     function formatTimeString(totalSeconds) {
         const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
         const secs = (totalSeconds % 60).toString().padStart(2, '0');
         return mins + ':' + secs;
     }
-    
-    async function initCapture() {
+
+    function showUI() {
+        uiOverlay.style.opacity = '1';
+        uiOverlay.classList.add('interactive');
+        clearTimeout(fadeTimeout);
+        if (!isRecording && !blockFadingForNotice) {
+            fadeTimeout = setTimeout(hideUI, 3000);
+        }
+    }
+
+    function hideUI() {
+        if (isRecording || blockFadingForNotice) return;
+        uiOverlay.style.opacity = '0';
+        uiOverlay.classList.remove('interactive');
+    }
+
+    window.addEventListener('mousemove', showUI);
+    window.addEventListener('click', showUI);
+
+    async function applyCaptureSettings() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+
+        const requested = JSON.parse(resSelector.value);
+        blockFadingForNotice = false;
+        hud.style.display = 'none';
+
         try {
             stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 1920, height: 1080, frameRate: 60 },
-                audio: true
+                video: { 
+                    width: { ideal: requested.w }, 
+                    height: { ideal: requested.h }, 
+                    frameRate: { ideal: requested.fps } 
+                },
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }
             });
+            
             videoElement.srcObject = stream;
-            hud.innerText = "🔴 Press Button or [SPACEBAR] to Start";
+
+            const videoTrack = stream.getVideoTracks()[0];
+            const trueSettings = videoTrack.getSettings();
+            const roundedFrameRate = Math.round(trueSettings.frameRate);
+
+            if (trueSettings.width < requested.w || trueSettings.height < requested.h || roundedFrameRate < requested.fps) {
+                blockFadingForNotice = true;
+                showUI();
+                
+                hud.style.display = 'block';
+                hud.style.color = '#ffaa00';
+                hud.innerText = `⚠️ Device does not support requested format! Fallback: ${trueSettings.width}x${trueSettings.height} @ ${roundedFrameRate}Hz`;
+                
+                // FIX: Force the dropdown selection menu to snap back to the actual fallback mode
+                resSelector.value = JSON.stringify({ w: trueSettings.width, h: trueSettings.height, fps: roundedFrameRate });
+            }
+            
         } catch (err) {
-            hud.innerText = "⚠️ Connection error.";
+            blockFadingForNotice = true;
+            showUI();
+            hud.style.display = 'block';
+            hud.style.color = '#ff3333';
+            hud.innerText = "⚠️ Error accessing hardware capture pipeline.";
         }
     }
 
@@ -55,9 +220,13 @@
         isRecording = true;
         recordingSeconds = 0;
         clickTrigger.innerText = '⏹️ Stop [00:00]';
-        hud.innerText = "Recording...";
+        
+        blockFadingForNotice = false;
+        hud.style.display = 'block';
+        hud.style.color = '#ff3333';
+        hud.innerText = "🔴 RECORDING LIVE";
+        resSelector.style.display = 'none';
 
-        // Pure VP8 direct raw feed handoff—no forced bitrate overhead to choke the encoder
         mediaRecorder = new MediaRecorder(stream, {
             mimeType: 'video/webm;codecs=vp8'
         });
@@ -71,7 +240,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'gameplay_1080p60_' + Date.now() + '.webm';
+            a.download = 'gameplay_capture_' + Date.now() + '.webm';
             document.body.appendChild(a);
             a.click();
             
@@ -80,7 +249,8 @@
                 window.URL.revokeObjectURL(url);
                 recordedChunks = [];
                 clickTrigger.innerText = "🔴 Start Recording";
-                hud.innerText = "🔴 Press Button or [SPACEBAR] to Start";
+                resSelector.style.display = 'inline-block';
+                applyCaptureSettings();
             }, 500);
         };
 
@@ -96,7 +266,7 @@
         isRecording = false;
         clearInterval(recordingInterval);
         clickTrigger.innerText = "💾 Saving File...";
-        hud.innerText = "Processing final webm...";
+        hud.innerText = "⏳ Processing final video file container...";
         mediaRecorder.stop();
     }
 
@@ -105,9 +275,16 @@
         if (!isRecording) startRecording(); else stopRecording();
     }
 
-    window.onkeydown = (e) => { if (e.code === 'Space') { e.preventDefault(); toggleCapture(); } };
+    window.onkeydown = (e) => { 
+        if (e.code === 'Space') { 
+            e.preventDefault(); 
+            toggleCapture(); 
+        } 
+    };
+    
     clickTrigger.addEventListener('click', toggleCapture);
-    window.addEventListener('DOMContentLoaded', initCapture);
+    resSelector.addEventListener('change', applyCaptureSettings);
+    window.addEventListener('DOMContentLoaded', applyCaptureSettings);
 </script>
 </body>
 </html>
