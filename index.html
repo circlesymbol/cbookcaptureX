@@ -378,7 +378,7 @@ videoEncoder.configure({
         
         // Every 5 frames, pause for 1 millisecond to let the system bus catch up
         if (i % 5 === 0) {
-            hud.innerText = `⚙️ Processing Archive: ${Math.round((i / rawFrameBuffer.length) * 100)}%`;
+            hud.innerText = '⚙️ Processing Archive: ' + Math.round((i / rawFrameBuffer.length) * 100) + '%';
             await new Promise(resolve => setTimeout(resolve, 1));
         }
     }
