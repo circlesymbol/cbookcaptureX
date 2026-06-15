@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>cbooxcaptureX</title>
+    <title>60fps Local Web Capture</title>
     <style>
         * {
             box-sizing: border-box;
@@ -90,7 +90,7 @@
         }
         #click-trigger:hover {
             background: #e60000;
-            opacity: 1.0 !important; /* Forces full visibility on hover regardless of recording state */
+            opacity: 1.0 !important;
         }
 
         /* OSD Banner */
@@ -123,6 +123,7 @@
             letter-spacing: 0.3px;
             margin-bottom: 5px;
             color: #ffffff;
+            text-transform: uppercase;
         }
         #tv-input-specs {
             font-size: 13px;
@@ -206,7 +207,7 @@
             pointer-events: none !important;
         }
         .ui-low-opacity {
-            opacity: 0.3 !important; /* Keeps timestamp barely visible during idle recording status */
+            opacity: 0.15 !important;
         }
         .hide-cursor {
             cursor: none !important;
@@ -311,7 +312,6 @@
             if (isStartingRecording || isRecording) {
                 hud.classList.add('ui-hidden');
                 resSelector.classList.add('ui-hidden');
-                // Instead of completely hiding the record button, drop it to low opacity
                 clickTrigger.classList.remove('ui-hidden');
                 clickTrigger.classList.add('ui-low-opacity');
             } else {
@@ -326,9 +326,23 @@
             }
         }
 
+        function cleanDeviceLabel(label) {
+            if (!label) return "USB Capture Card";
+            
+            // Clean common generic descriptors and system wrappers to find the real name
+            let clean = label
+                .replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*/gi, '') // Remove hex hardware IDs
+                .replace(/video\s*capture/gi, '') 
+                .replace(/usb\s*video\s*device/gi, '')
+                .replace(/usb\s*camera/gi, '')
+                .replace(/(^\s+|\s+$)/g, ''); // Trim spacing
+                
+            return clean.length > 2 ? clean : "USB Capture Card";
+        }
+
         function triggerTVBanner(rawDeviceName, width, height, fps) {
             clearTimeout(tvBannerTimeout);
-            tvInputTitle.innerText = rawDeviceName;
+            tvInputTitle.innerText = cleanDeviceLabel(rawDeviceName);
             tvInputSpecs.innerText = `${width} × ${height} @ ${fps}Hz`;
             tvBanner.classList.add('banner-active');
             tvBannerTimeout = setTimeout(() => {
@@ -364,66 +378,19 @@
 
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
                 const audioDevices = devices.filter(d => d.kind === 'audioinput');
-// 1. Strict filtering function to block internal webcams
-function isBuiltInWebcam(device) {
-    if (!device.label) return false;
-    
-    const labelLower = device.label.toLowerCase();
-    const bannedKeywords = [
-        'front camera', 
-        'rear camera', 
-        'internal camera', 
-        'integrated camera', 
-        'built-in', 
-        'chromebook camera',
-        'webcam' // Note: Remove 'webcam' if your external capture card uses this word in its name
-    ];
-    
-    return bannedKeywords.some(keyword => labelLower.includes(keyword));
-}
 
-// 2. Main function to safely request permissions, filter devices, and update your UI
-async function initializeCaptureDevices() {
-    try {
-        // Force the browser to prompt for permission immediately.
-        // This unblinds the device labels so the banner displays the real name on the very first visit.
-        const temporaryStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        
-        // Stop the temporary stream right away so the webcam light turns off
-        temporaryStream.getTracks().forEach(track => track.stop());
-        
-        // Now that permission is granted, enumerate the devices
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        
-        // Filter out any device matching the built-in webcam rules
-        const filteredDevices = videoDevices.filter(device => !isBuiltInWebcam(device));
-        
-        if (filteredDevices.length > 0) {
-            // Pick the first valid external capture device found
-            const captureCard = filteredDevices[0];
-            const deviceName = captureCard.label || "External Capture Card";
-            
-            // --- UPDATE YOUR INFO BANNER HERE ---
-            // Replace 'info-banner-id' with the actual ID of your HTML element
-            document.getElementById('info-banner-id').innerText = `Connected to: ${deviceName}`;
-            
-            // Proceed with your existing code to link the stream to your video element
-            startRecordingStream(captureCard.deviceId);
-        } else {
-            document.getElementById('info-banner-id').innerText = "No external capture cards detected.";
-        }
-        
-    } catch (error) {
-        console.error("Error accessing media devices:", error);
-        document.getElementById('info-banner-id').innerText = "Permission denied or no devices found.";
-    }
-}
-
-// Run the setup when the page loads
-window.addEventListener('DOMContentLoaded', initializeCaptureDevices);
-
-            }
+                // Hardened filter specifically targeting internal webcams and dual-camera Chromebook layouts
+                const externalVideoDevices = videoDevices.filter(device => {
+                    const label = device.label.toLowerCase();
+                    return !label.includes('integrated') && 
+                           !label.includes('internal') && 
+                           !label.includes('front') && 
+                           !label.includes('rear') && 
+                           !label.includes('back') && 
+                           !label.includes('webcam') && 
+                           !label.includes('camera') && 
+                           !label.includes('chromebook');
+                });
 
                 if (externalVideoDevices.length === 0) {
                     allowUIFading = false;
@@ -445,7 +412,10 @@ window.addEventListener('DOMContentLoaded', initializeCaptureDevices);
                     const selectedProfile = JSON.parse(resSelector.value);
 
                     let audioConstraint = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-                    const externalAudioDevices = audioDevices.filter(d => !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
+                    const externalAudioDevices = audioDevices.filter(d => {
+                        const lbl = d.label.toLowerCase();
+                        return !lbl.includes('internal') && !lbl.includes('integrated') && !lbl.includes('chromebook');
+                    });
                     if (externalAudioDevices.length > 0) {
                         audioConstraint.deviceId = { exact: externalAudioDevices[0].deviceId };
                     }
@@ -495,7 +465,7 @@ window.addEventListener('DOMContentLoaded', initializeCaptureDevices);
             if (videoTrack) {
                 const settings = videoTrack.getSettings();
                 triggerTVBanner(
-                    deviceLabel || "USB Capture Card", 
+                    deviceLabel, 
                     settings.width || 1280, 
                     settings.height || 720, 
                     Math.round(settings.frameRate || 60)
@@ -522,7 +492,13 @@ window.addEventListener('DOMContentLoaded', initializeCaptureDevices);
                 });
                 
                 await new Promise(r => setTimeout(r, 250));
-                const trueSettings = updateOSD("Updated Resolution");
+                
+                // Get fresh list to preserve correct dynamic label matching
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const activeTrackSettings = videoTrack.getSettings();
+                const currentDevice = devices.find(d => d.kind === 'videoinput' && d.label && !d.label.toLowerCase().includes('internal') && !d.label.toLowerCase().includes('integrated'));
+                
+                const trueSettings = updateOSD(currentDevice ? currentDevice.label : "Updated Resolution");
 
                 if (trueSettings) {
                     const roundedFrameRate = Math.round(trueSettings.frameRate || 0);
