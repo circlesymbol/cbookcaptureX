@@ -364,11 +364,66 @@
 
                 const videoDevices = devices.filter(d => d.kind === 'videoinput');
                 const audioDevices = devices.filter(d => d.kind === 'audioinput');
+// 1. Strict filtering function to block internal webcams
+function isBuiltInWebcam(device) {
+    if (!device.label) return false;
+    
+    const labelLower = device.label.toLowerCase();
+    const bannedKeywords = [
+        'front camera', 
+        'rear camera', 
+        'internal camera', 
+        'integrated camera', 
+        'built-in', 
+        'chromebook camera',
+        'webcam' // Note: Remove 'webcam' if your external capture card uses this word in its name
+    ];
+    
+    return bannedKeywords.some(keyword => labelLower.includes(keyword));
+}
 
-                const externalVideoDevices = videoDevices.filter(device => {
-                    const label = device.label.toLowerCase();
-                    return !label.includes('integrated') && !label.includes('internal') && !label.includes('front') && !label.includes('webcam');
-                });
+// 2. Main function to safely request permissions, filter devices, and update your UI
+async function initializeCaptureDevices() {
+    try {
+        // Force the browser to prompt for permission immediately.
+        // This unblinds the device labels so the banner displays the real name on the very first visit.
+        const temporaryStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        
+        // Stop the temporary stream right away so the webcam light turns off
+        temporaryStream.getTracks().forEach(track => track.stop());
+        
+        // Now that permission is granted, enumerate the devices
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        // Filter out any device matching the built-in webcam rules
+        const filteredDevices = videoDevices.filter(device => !isBuiltInWebcam(device));
+        
+        if (filteredDevices.length > 0) {
+            // Pick the first valid external capture device found
+            const captureCard = filteredDevices[0];
+            const deviceName = captureCard.label || "External Capture Card";
+            
+            // --- UPDATE YOUR INFO BANNER HERE ---
+            // Replace 'info-banner-id' with the actual ID of your HTML element
+            document.getElementById('info-banner-id').innerText = `Connected to: ${deviceName}`;
+            
+            // Proceed with your existing code to link the stream to your video element
+            startRecordingStream(captureCard.deviceId);
+        } else {
+            document.getElementById('info-banner-id').innerText = "No external capture cards detected.";
+        }
+        
+    } catch (error) {
+        console.error("Error accessing media devices:", error);
+        document.getElementById('info-banner-id').innerText = "Permission denied or no devices found.";
+    }
+}
+
+// Run the setup when the page loads
+window.addEventListener('DOMContentLoaded', initializeCaptureDevices);
+
+            }
 
                 if (externalVideoDevices.length === 0) {
                     allowUIFading = false;
