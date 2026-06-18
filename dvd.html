@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRT Pre-Stretched DVD Bounce</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* The 4:3 Canvas Workspace:
+           We hardcode it to a classic 4:3 aspect ratio box, then force a CSS 
+           horizontal scale multiplier of 1.333 (Stretching 4:3 -> 16:9 format).
+           When your HD2AV adapter squishes it back down, it becomes perfectly proportioned.
+        */
+        #canvas-43 {
+            position: relative;
+            width: 100vh; /* Using viewport height to maximize vertical space cleanly */
+            height: 75vh;  /* 100w x 75h = Native 4:3 proportion layout */
+            background-color: #000;
+            transform: scaleX(1.3333); /* The magic stretch parameter for your downscaler */
+            transform-origin: center center;
+            overflow: hidden;
+        }
+
+        /* Pure vector inline-SVG styling for the DVD graphic */
+        #dvd-logo {
+            position: absolute;
+            width: 120px;
+            height: 55px;
+            pointer-events: none;
+            left: 0;
+            top: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-43">
+        <svg id="dvd-logo" viewBox="0 0 100 45">
+            <g fill="#00E676" id="dvd-color-group">
+                <path d="M50,22.5 C75,22.5 95,18.5 95,13.5 C95,8.5 75,4.5 50,4.5 C25,4.5 5,8.5 5,13.5 C5,18.5 25,22.5 50,22.5 Z M50,7.5 C68,7.5 82,10.2 82,13.5 C82,16.8 68,19.5 50,19.5 C32,19.5 18,16.8 18,13.5 C18,10.2 32,7.5 50,7.5 Z"/>
+                <path d="M50,17.5 C60,17.5 68,15.7 68,13.5 C68,11.3 60,9.5 50,9.5 C40,9.5 32,11.3 32,13.5 C32,15.7 40,17.5 50,17.5 Z M50,11.5 C55,11.5 58,12.4 58,13.5 C58,14.6 55,15.5 50,15.5 C45,15.5 42,14.6 42,13.5 C42,12.4 45,11.5 50,11.5 Z"/>
+                <text x="50" y="38" font-family="'Arial Black', Impact, sans-serif" font-size="18" font-weight="900" text-anchor="middle" letter-spacing="1">DVD</text>
+                <text x="50" y="44" font-family="Arial, sans-serif" font-size="5" font-weight="bold" text-anchor="middle" letter-spacing="0.5">VIDEO</text>
+            </g>
+        </svg>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas-43');
+        const logo = document.getElementById('dvd-logo');
+        const colorGroup = document.getElementById('dvd-color-group');
+
+        // Vintage CRT display colors to cycle through on every bounce edge hit
+        const retroColors = [
+            '#00E676', // Bright Green
+            '#FF3333', // Neon Red
+            '#00B0FF', // Vivid Cyan
+            '#FFEA00', // Laser Yellow
+            '#D500F9', // Intense Purple
+            '#FF6D00', // Deep Orange
+            '#FFFFFF'  // Pure White
+        ];
+
+        let currentWidth = canvas.clientWidth;
+        let currentHeight = canvas.clientHeight;
+        
+        const logoWidth = 120;
+        const logoHeight = 55;
+
+        // Start random spot on screen
+        let posX = Math.floor(Math.random() * (currentWidth - logoWidth));
+        let posY = Math.floor(Math.random() * (currentHeight - logoHeight));
+        
+        // Solid vector velocities
+        let velX = 2.5;
+        let velY = 2.5;
+        
+        let colorIndex = 0;
+
+        function updateBounds() {
+            currentWidth = canvas.clientWidth;
+            currentHeight = canvas.clientHeight;
+        }
+
+        function animate() {
+            posX += velX;
+            posY += velY;
+
+            let hitEdge = false;
+
+            // X axis calculations
+            if (posX + logoWidth >= currentWidth) {
+                posX = currentWidth - logoWidth;
+                velX = -velX;
+                hitEdge = true;
+            } else if (posX <= 0) {
+                posX = 0;
+                velX = -velX;
+                hitEdge = true;
+            }
+
+            // Y axis calculations
+            if (posY + logoHeight >= currentHeight) {
+                posY = currentHeight - logoHeight;
+                velY = -velY;
+                hitEdge = true;
+            } else if (posY <= 0) {
+                posY = 0;
+                velY = -velY;
+                hitEdge = true;
+            }
+
+            // Cycle fill color cleanly when an asset boundary collision occurs
+            if (hitEdge) {
+                let nextColorIndex = Math.floor(Math.random() * retroColors.length);
+                if (nextColorIndex === colorIndex) {
+                    nextColorIndex = (nextColorIndex + 1) % retroColors.length;
+                }
+                colorIndex = nextColorIndex;
+                colorGroup.setAttribute('fill', retroColors[colorIndex]);
+            }
+
+            logo.style.transform = `translate3d(${posX}px, ${posY}px, 0)`;
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', () => {
+            updateBounds();
+            // Bound safety check in case window shrinks quickly
+            if (posX + logoWidth > currentWidth) posX = currentWidth - logoWidth;
+            if (posY + logoHeight > currentHeight) posY = currentHeight - logoHeight;
+        });
+
+        // Initialize position tracking loops seamlessly
+        updateBounds();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
