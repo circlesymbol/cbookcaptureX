@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pre-Stretched 4:3 DVD Bounce</title>
+    <title>Pre-Stretched 4:3 DVD Bounce (PNG Version)</title>
     <style>
         * { box-sizing: border-box; }
         body, html {
@@ -19,9 +19,9 @@
             background-color: #000;
             overflow: hidden;
         }
-        /* Instead of stretching the container, we explicitly stretch the logo itself.
-           Normal dimensions are 128x56. We apply a 1.333x horizontal multiplier 
-           directly to the width (128 * 1.3333 = ~170px) while keeping height at 56px.
+        /* Custom image asset wrapper:
+           Stretched horizontally to 170px to compensate for the 
+           subsequent analog downscaler compression.
         */
         #dvd-logo {
             position: absolute;
@@ -29,38 +29,38 @@
             height: 56px;
             pointer-events: none;
             left: 0; top: 0;
+            /* Applies a vintage color overlay filter onto the asset. 
+               This lets us dynamically shift the solid color on every bounce. */
+            filter: drop-shadow(0px 0px 0px #00E676);
         }
     </style>
 </head>
 <body>
 
     <div id="canvas-full">
-        <svg id="dvd-logo" viewBox="0 0 128 56" preserveAspectRatio="none">
-            <g fill="#00E676" id="dvd-color-group">
-                <path d="M5.1,6h12.4c7.6,0,11.9,4,11.9,10.6c0,6.6-4.3,10.6-11.9,10.6H5.1V6z M17.2,22.4c4.3,0,6.5-2.1,6.5-5.8c0-3.7-2.2-5.8-6.5-5.8H10.6v11.6H17.2z M31.1,6h5.8l6.7,17.4L50.3,6h5.8L46.4,27.2h-5.6L31.1,6z M57.8,6H70.2c7.6,0,11.9,4,11.9,10.6c0,6.6-4.3,10.6-11.9,10.6H57.8V6z M69.9,22.4c4.3,0,6.5-2.1,6.5-5.8c0-3.7-2.2-5.8-6.5-5.8H63.3v11.6H69.9z"/>
-                <path d="M43.7,31.7c22.7,0,41.1-2.9,41.1-6.5s-18.4-6.5-41.1-6.5S2.6,21.6,2.6,25.2S21,31.7,43.7,31.7z M43.7,20.8c12.2,0,22.1,1.5,22.1,3.4s-9.9,3.4-22.1,3.4s-22.1-1.5-22.1-3.4S31.5,20.8,43.7,20.8z"/>
-                <path d="M14.5,38.1h4.8l2.6,8.4l2.6-8.4h4.8l-5.1,14.6h-4.6L14.5,38.1z M34.6,38.1h4.4v14.6h-4.4V38.1z M43.7,38.1h6.2c4.9,0,8,2.7,8,7.3c0,4.6-3.1,7.3-8,7.3h-6.2V38.1z M49.8,48.5c2.4,0,3.6-1.2,3.6-3.1c0-1.9-1.2-3.1-3.6-3.1h-1.7v6.2H49.8z M62.4,38.1h11.1v3.5H66.8v2.1h5.8v3.4h-5.8v2.1h6.8v3.5H62.4V38.1z M85.6,45.4c0,4.8-3.7,7.6-8.5,7.6c-4.8,0-8.5-2.8-8.5-7.6c0-4.8,3.7-7.6,8.5-7.6C81.9,37.8,85.6,40.6,85.6,45.4z M73.2,45.4c0,2.6,1.7,4,3.9,4c2.2,0,3.9-1.4,3.9-4c0-2.6-1.7-4-3.9-4C74.9,41.4,73.2,42.8,73.2,45.4z"/>
-            </g>
-        </svg>
+        <img id="dvd-logo" src="dvd.png" alt="DVD Video">
     </div>
 
     <script>
         const canvas = document.getElementById('canvas-full');
         const logo = document.getElementById('dvd-logo');
-        const colorGroup = document.getElementById('dvd-color-group');
 
+        // Retro hex colors used to tint your PNG asset dynamically
         const retroColors = ['#00E676', '#FF3333', '#00B0FF', '#FFEA00', '#D500F9', '#FF6D00', '#FFFFFF'];
 
         let currentWidth = canvas.clientWidth;
         let currentHeight = canvas.clientHeight;
         
-        // Match the wide 170px dimensions specified in the CSS
+        // Exact container size matching the CSS properties
         const logoWidth = 170; 
         const logoHeight = 56;
 
         let posX = Math.floor(Math.random() * (currentWidth - logoWidth));
         let posY = Math.floor(Math.random() * (currentHeight - logoHeight));
-        let velX = 2; let velY = 2;
+        
+        // Increased tracking velocity to compensate for the wider screen real estate
+        let velX = 4.5; 
+        let velY = 4.5;
         let colorIndex = 0;
 
         function updateBounds() {
@@ -72,17 +72,36 @@
             posX += velX; posY += velY;
             let hitEdge = false;
 
-            if (posX + logoWidth >= currentWidth) { posX = currentWidth - logoWidth; velX = -velX; hitEdge = true; }
-            else if (posX <= 0) { posX = 0; velX = -velX; hitEdge = true; }
+            // X-axis border collisions
+            if (posX + logoWidth >= currentWidth) { 
+                posX = currentWidth - logoWidth; 
+                velX = -velX; 
+                hitEdge = true; 
+            } else if (posX <= 0) { 
+                posX = 0; 
+                velX = -velX; 
+                hitEdge = true; 
+            }
 
-            if (posY + logoHeight >= currentHeight) { posY = currentHeight - logoHeight; velY = -velY; hitEdge = true; }
-            else if (posY <= 0) { posY = 0; velY = -velY; hitEdge = true; }
+            // Y-axis border collisions
+            if (posY + logoHeight >= currentHeight) { 
+                posY = currentHeight - logoHeight; 
+                velY = -velY; 
+                hitEdge = true; 
+            } else if (posY <= 0) { 
+                posY = 0; 
+                velY = -velY; 
+                hitEdge = true; 
+            }
 
+            // On impact, cycle colors using a CSS filter trick on the PNG transparent layer
             if (hitEdge) {
                 let nextColorIndex = Math.floor(Math.random() * retroColors.length);
                 if (nextColorIndex === colorIndex) nextColorIndex = (nextColorIndex + 1) % retroColors.length;
                 colorIndex = nextColorIndex;
-                colorGroup.setAttribute('fill', retroColors[colorIndex]);
+                
+                // Shift color values on the asset via precise drop-shadow rendering injection
+                logo.style.filter = `drop-shadow(0px 0px 0px ${retroColors[colorIndex]})`;
             }
 
             logo.style.transform = `translate3d(${posX}px, ${posY}px, 0)`;
@@ -99,4 +118,4 @@
         requestAnimationFrame(animate);
     </script>
 </body>
-    </html>
+</html>
