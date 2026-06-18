@@ -3,58 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRT Pre-Stretched DVD Bounce</title>
+    <title>Standard 4:3 DVD Bounce</title>
     <style>
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
             background-color: #000;
             overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
         }
-
-        /* The 4:3 Canvas Workspace:
-           We hardcode it to a classic 4:3 aspect ratio box, then force a CSS 
-           horizontal scale multiplier of 1.333 (Stretching 4:3 -> 16:9 format).
-           When your HD2AV adapter squishes it back down, it becomes perfectly proportioned.
-        */
         #canvas-43 {
             position: relative;
-            width: 100vh; /* Using viewport height to maximize vertical space cleanly */
-            height: 75vh;  /* 100w x 75h = Native 4:3 proportion layout */
+            width: 100vh;
+            height: 75vh; 
             background-color: #000;
-            transform: scaleX(1.3333); /* The magic stretch parameter for your downscaler */
-            transform-origin: center center;
             overflow: hidden;
         }
-
-        /* Pure vector inline-SVG styling for the DVD graphic */
         #dvd-logo {
             position: absolute;
-            width: 120px;
-            height: 55px;
+            width: 128px;
+            height: 56px;
             pointer-events: none;
-            left: 0;
-            top: 0;
+            left: 0; top: 0;
         }
     </style>
 </head>
 <body>
 
     <div id="canvas-43">
-        <svg id="dvd-logo" viewBox="0 0 100 45">
+        <svg id="dvd-logo" viewBox="0 0 128 56">
             <g fill="#00E676" id="dvd-color-group">
-                <path d="M50,22.5 C75,22.5 95,18.5 95,13.5 C95,8.5 75,4.5 50,4.5 C25,4.5 5,8.5 5,13.5 C5,18.5 25,22.5 50,22.5 Z M50,7.5 C68,7.5 82,10.2 82,13.5 C82,16.8 68,19.5 50,19.5 C32,19.5 18,16.8 18,13.5 C18,10.2 32,7.5 50,7.5 Z"/>
-                <path d="M50,17.5 C60,17.5 68,15.7 68,13.5 C68,11.3 60,9.5 50,9.5 C40,9.5 32,11.3 32,13.5 C32,15.7 40,17.5 50,17.5 Z M50,11.5 C55,11.5 58,12.4 58,13.5 C58,14.6 55,15.5 50,15.5 C45,15.5 42,14.6 42,13.5 C42,12.4 45,11.5 50,11.5 Z"/>
-                <text x="50" y="38" font-family="'Arial Black', Impact, sans-serif" font-size="18" font-weight="900" text-anchor="middle" letter-spacing="1">DVD</text>
-                <text x="50" y="44" font-family="Arial, sans-serif" font-size="5" font-weight="bold" text-anchor="middle" letter-spacing="0.5">VIDEO</text>
+                <path d="M5.1,6h12.4c7.6,0,11.9,4,11.9,10.6c0,6.6-4.3,10.6-11.9,10.6H5.1V6z M17.2,22.4c4.3,0,6.5-2.1,6.5-5.8c0-3.7-2.2-5.8-6.5-5.8H10.6v11.6H17.2z M31.1,6h5.8l6.7,17.4L50.3,6h5.8L46.4,27.2h-5.6L31.1,6z M57.8,6H70.2c7.6,0,11.9,4,11.9,10.6c0,6.6-4.3,10.6-11.9,10.6H57.8V6z M69.9,22.4c4.3,0,6.5-2.1,6.5-5.8c0-3.7-2.2-5.8-6.5-5.8H63.3v11.6H69.9z"/>
+                <path d="M43.7,31.7c22.7,0,41.1-2.9,41.1-6.5s-18.4-6.5-41.1-6.5S2.6,21.6,2.6,25.2S21,31.7 nudge,43.7,31.7z M43.7,20.8c12.2,0,22.1,1.5,22.1,3.4s-9.9,3.4-22.1,3.4s-22.1-1.5-22.1-3.4S31.5,20.8,43.7,20.8z"/>
+                <path d="M14.5,38.1h4.8l2.6,8.4l2.6-8.4h4.8l-5.1,14.6h-4.6L14.5,38.1z M34.6,38.1h4.4v14.6h-4.4V38.1z M43.7,38.1h6.2c4.9,0,8,2.7,8,7.3c0,4.6-3.1,7.3-8,7.3h-6.2V38.1z M49.8,48.5c2.4,0,3.6-1.2,3.6-3.1c0-1.9-1.2-3.1-3.6-3.1h-1.7v6.2H49.8z M62.4,38.1h11.1v3.5H66.8v2.1h5.8v3.4h-5.8v2.1h6.8v3.5H62.4V38.1z M85.6,45.4c0,4.8-3.7,7.6-8.5,7.6c-4.8,0-8.5-2.8-8.5-7.6c0-4.8,3.7-7.6,8.5-7.6C81.9,37.8,85.6,40.6,85.6,45.4z M73.2,45.4c0,2.6,1.7,4,3.9,4c2.2,0,3.9-1.4,3.9-4c0-2.6-1.7-4-3.9-4C74.9,41.4,73.2,42.8,73.2,45.4z"/>
             </g>
         </svg>
     </div>
@@ -64,31 +46,15 @@
         const logo = document.getElementById('dvd-logo');
         const colorGroup = document.getElementById('dvd-color-group');
 
-        // Vintage CRT display colors to cycle through on every bounce edge hit
-        const retroColors = [
-            '#00E676', // Bright Green
-            '#FF3333', // Neon Red
-            '#00B0FF', // Vivid Cyan
-            '#FFEA00', // Laser Yellow
-            '#D500F9', // Intense Purple
-            '#FF6D00', // Deep Orange
-            '#FFFFFF'  // Pure White
-        ];
+        const retroColors = ['#00E676', '#FF3333', '#00B0FF', '#FFEA00', '#D500F9', '#FF6D00', '#FFFFFF'];
 
         let currentWidth = canvas.clientWidth;
         let currentHeight = canvas.clientHeight;
-        
-        const logoWidth = 120;
-        const logoHeight = 55;
+        const logoWidth = 128; const logoHeight = 56;
 
-        // Start random spot on screen
         let posX = Math.floor(Math.random() * (currentWidth - logoWidth));
         let posY = Math.floor(Math.random() * (currentHeight - logoHeight));
-        
-        // Solid vector velocities
-        let velX = 2.5;
-        let velY = 2.5;
-        
+        let velX = 2.5; let velY = 2.5;
         let colorIndex = 0;
 
         function updateBounds() {
@@ -97,39 +63,18 @@
         }
 
         function animate() {
-            posX += velX;
-            posY += velY;
-
+            posX += velX; posY += velY;
             let hitEdge = false;
 
-            // X axis calculations
-            if (posX + logoWidth >= currentWidth) {
-                posX = currentWidth - logoWidth;
-                velX = -velX;
-                hitEdge = true;
-            } else if (posX <= 0) {
-                posX = 0;
-                velX = -velX;
-                hitEdge = true;
-            }
+            if (posX + logoWidth >= currentWidth) { posX = currentWidth - logoWidth; velX = -velX; hitEdge = true; }
+            else if (posX <= 0) { posX = 0; velX = -velX; hitEdge = true; }
 
-            // Y axis calculations
-            if (posY + logoHeight >= currentHeight) {
-                posY = currentHeight - logoHeight;
-                velY = -velY;
-                hitEdge = true;
-            } else if (posY <= 0) {
-                posY = 0;
-                velY = -velY;
-                hitEdge = true;
-            }
+            if (posY + logoHeight >= currentHeight) { posY = currentHeight - logoHeight; velY = -velY; hitEdge = true; }
+            else if (posY <= 0) { posY = 0; velY = -velY; hitEdge = true; }
 
-            // Cycle fill color cleanly when an asset boundary collision occurs
             if (hitEdge) {
                 let nextColorIndex = Math.floor(Math.random() * retroColors.length);
-                if (nextColorIndex === colorIndex) {
-                    nextColorIndex = (nextColorIndex + 1) % retroColors.length;
-                }
+                if (nextColorIndex === colorIndex) nextColorIndex = (nextColorIndex + 1) % retroColors.length;
                 colorIndex = nextColorIndex;
                 colorGroup.setAttribute('fill', retroColors[colorIndex]);
             }
@@ -140,14 +85,12 @@
 
         window.addEventListener('resize', () => {
             updateBounds();
-            // Bound safety check in case window shrinks quickly
             if (posX + logoWidth > currentWidth) posX = currentWidth - logoWidth;
             if (posY + logoHeight > currentHeight) posY = currentHeight - logoHeight;
         });
 
-        // Initialize position tracking loops seamlessly
         updateBounds();
         requestAnimationFrame(animate);
     </script>
 </body>
-</html>
+    </html>
