@@ -1,0 +1,13 @@
+# Use a lightweight Ubuntu image with an interactive desktop pre-installed
+FROM dorowu/ubuntu-desktop-lxde-vnc:latest
+
+# Set up environment variables for the system
+ENV USER=root
+ENV PASSWORD=yourpasswordhere
+ENV PORT=7860
+
+# Expose the specific network port Hugging Face requires
+EXPOSE 7860
+
+# Start the virtual desktop server automatically
+CMD ["/startup.sh"]
