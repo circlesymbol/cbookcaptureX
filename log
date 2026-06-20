@@ -1,0 +1,61 @@
+===== Application Startup at 2026-06-20 04:01:29 =====
+
+[migrations] started
+[migrations] no migrations found
+usermod: no changes
+───────────────────────────────────────
+
+      ██╗     ███████╗██╗ ██████╗
+      ██║     ██╔════╝██║██╔═══██╗
+      ██║     ███████╗██║██║   ██║
+      ██║     ╚════██║██║██║   ██║
+      ███████╗███████║██║╚██████╔╝
+      ╚══════╝╚══════╝╚═╝ ╚═════╝
+
+   Brought to you by linuxserver.io
+───────────────────────────────────────
+
+To support LSIO projects visit:
+https://www.linuxserver.io/donate/
+
+───────────────────────────────────────
+GID/UID
+───────────────────────────────────────
+
+User UID:    911
+User GID:    911
+───────────────────────────────────────
+.............+............+...+...+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*...+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*....+..+.+.....+.+...+..+.........+.........+.+.........+..+.............+..+......+..........+...+..+.......+.....+...+............+.+..+.........+....+......+......+...+.....+......+......+...+.......+...+.....+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+........+..............+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*........+......+...+.........+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*...+............+......+.........+......+.....+.......+...+..+.........................+...+.....+...............+....+........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+[custom-init] No custom files found, skipping...
+[ls.io-init] done.
+_XSERVTransmkdir: ERROR: euid != 0,directory /tmp/.X11-unix will not be created.
+
+Xvnc KasmVNC 1.3.3 - built Jun 21 2025 19:10:45
+Copyright (C) 1999-2018 KasmVNC Team and many others (see README.me)
+See http://kasmweb.com for information on KasmVNC.
+Underlying X server release 12101012
+
+The XKEYBOARD keymap compiler (xkbcomp) reports:
+> Warning:          Could not resolve keysym XF86CameraAccessEnable
+> Warning:          Could not resolve keysym XF86CameraAccessDisable
+> Warning:          Could not resolve keysym XF86CameraAccessToggle
+> Warning:          Could not resolve keysym XF86NextElement
+> Warning:          Could not resolve keysym XF86PreviousElement
+> Warning:          Could not resolve keysym XF86AutopilotEngageToggle
+> Warning:          Could not resolve keysym XF86MarkWaypoint
+> Warning:          Could not resolve keysym XF86Sos
+> Warning:          Could not resolve keysym XF86NavChart
+> Warning:          Could not resolve keysym XF86FishingChart
+> Warning:          Could not resolve keysym XF86SingleRangeRadar
+> Warning:          Could not resolve keysym XF86DualRangeRadar
+> Warning:          Could not resolve keysym XF86RadarOverlay
+> Warning:          Could not resolve keysym XF86TraditionalSonar
+> Warning:          Could not resolve keysym XF86ClearvuSonar
+> Warning:          Could not resolve keysym XF86SidevuSonar
+> Warning:          Could not resolve keysym XF86NavInfo
+Errors from xkbcomp are not fatal to the X server
+[mi] mieq: warning: overriding existing handler (nil) with 0x55e6968a4930 for event 2
+[mi] mieq: warning: overriding existing handler (nil) with 0x55e6968a4930 for event 3
+19
