@@ -1,13 +1,10 @@
-# Use an Ubuntu core pre-configured for web routing and strict cloud sandboxes
-FROM lscr.io/linuxserver/webtop:ubuntu-openbox
+# Use an automated web-desktop image that establishes web routing instantly
+FROM securecom/kasm-ubuntu-lxde:1.15.0
 
-# Point the internal visual layout system to Hugging Face's default port
-ENV PORT=7860
+# Bind explicitly to Hugging Face's default communication port
+ENV VNC_PORT=7860
 EXPOSE 7860
 
-# Redirect the system home directory to a safe, unrestricted temporary folder
+# Redirect the environment variables to bypass root checks
 ENV HOME=/tmp
 WORKDIR /tmp
-
-# Build a safe local configuration folder that does not trigger permission errors
-RUN mkdir -p /tmp/config && chmod -R 777 /tmp
