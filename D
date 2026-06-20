@@ -1,13 +1,15 @@
-# Use a lightweight Ubuntu image with an interactive desktop pre-installed
-FROM dorowu/ubuntu-desktop-lxde-vnc:latest
+# Use a highly compatible, secure Ubuntu desktop base image
+FROM linuxserver/webtop:ubuntu-mate
 
-# Set up environment variables for the system
-ENV USER=root
-ENV PASSWORD=yourpasswordhere
+# Force the container's built-in web server to use Hugging Face's port
 ENV PORT=7860
-
-# Expose the specific network port Hugging Face requires
 EXPOSE 7860
 
-# Start the virtual desktop server automatically
-CMD ["/startup.sh"]
+# Set up standard system permissions
+ENV PUID=1000
+ENV PGID=1000
+ENV TZ=Etc/UTC
+
+# Hugging Face runs containers as non-root users for safety. 
+# We give the system directory open permissions so it doesn't crash on boot.
+RUN chmod -R 777 /var /run /abc
