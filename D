@@ -1,15 +1,13 @@
-# Use a highly compatible, secure Ubuntu desktop base image
-FROM linuxserver/webtop:ubuntu-mate
+# Use an Ubuntu core pre-configured for web routing and strict cloud sandboxes
+FROM lscr.io/linuxserver/webtop:ubuntu-openbox
 
-# Force the container's built-in web server to use Hugging Face's port
+# Point the internal visual layout system to Hugging Face's default port
 ENV PORT=7860
 EXPOSE 7860
 
-# Set up standard system permissions
-ENV PUID=1000
-ENV PGID=1000
-ENV TZ=Etc/UTC
+# Redirect the system home directory to a safe, unrestricted temporary folder
+ENV HOME=/tmp
+WORKDIR /tmp
 
-# Hugging Face runs containers as non-root users for safety. 
-# We give the system directory open permissions so it doesn't crash on boot.
-RUN chmod -R 777 /var /run /abc
+# Build a safe local configuration folder that does not trigger permission errors
+RUN mkdir -p /tmp/config && chmod -R 777 /tmp
