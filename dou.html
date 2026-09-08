@@ -10,19 +10,16 @@
         select, button { padding: 10px; margin: 10px; background: #252525; color: #fff; border: 1px solid #333; border-radius: 4px; }
         button { background: #00adb5; font-weight: bold; cursor: pointer; }
         
-        /* HIGH-QUALITY PREVIEW FIX: Forces the browser display window to match 
-           the exact 720p drawing resolution, disabling anti-alias blur entirely */
+        /* THE CRITICAL CSS RESOLUTION LOCK: Forces the browser display window 
+           to mirror the strict 720p hardware space, disabling anti-alias blur */
         canvas { 
-            width: 1280px; 
-            height: 720px; 
+            width: 1280px !important; 
+            height: 720px !important; 
             background: #000; 
             margin-top: 20px; 
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            image-rendering: -moz-crisp-edges;
-            image-rendering: -webkit-crisp-edges;
-            image-rendering: pixelated;
             image-rendering: crisp-edges;
+            image-rendering: pixelated;
         }
         .status { margin: 10px; color: #888; font-size: 14px; }
     </style>
@@ -30,7 +27,7 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Unthrottled Studio (High-Quality Preview Build)</h2>
+    <h2>Chromebook Unthrottled Studio (Full-Res Canvas Build)</h2>
     <button id="pBtn">Click to Unlock Hardware</button>
     <div id="controls" style="display:none;">
         <p>Capture Card Video: <select id="bSel"></select></p>
@@ -119,15 +116,16 @@
                 audio: { deviceId: { exact: aSel2.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
 
+            // Width constraints defined explicitly inside target media stream requests
             bStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: bSel.value }, width: { ideal: 1280 }, height: { ideal: 720 } }
             });
-            bVid.srcObject = bStr; await bVid.play();
+            bVid.srcObject = bStr; window.bVidStream = bStr; bVid.play();
 
             oStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: oSel.value }, width: { ideal: 640 }, height: { ideal: 480 } }
             });
-            oVid.srcObject = oStr; await oVid.play();
+            oVid.srcObject = oStr; window.oVidStream = oStr; oVid.play();
 
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             audioDestination = audioCtx.createMediaStreamDestination();
@@ -153,10 +151,12 @@
 
             worker.onmessage = function(e) {
                 if (e.data === 'tick') {
-                    // Turn on crisp pixel settings on the rendering context layer
+                    // Turn off image scaling smoothing interpolation on the context drawing layer
                     ctx.imageSmoothingEnabled = false;
                     
                     ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
+                    
+                    // Maps video components to full 1:1 scale geometry bounds on canvas screen
                     ctx.drawImage(bVid, 0, 0, 1280, 720);
                     ctx.drawImage(oVid, 940, 480, 320, 210);
                 }
@@ -165,7 +165,7 @@
 
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
-            st.innerText = "High-Quality Preview layout loaded cleanly.";
+            st.innerText = "Full-Res layout initialized safely.";
         } catch (e) {
             st.innerText = "Stream hardware mapping failed.";
         }
@@ -174,7 +174,7 @@
     rBtn.addEventListener('click', () => {
         chunks = [];
         
-        // Target the newly sharpened and expanded high-quality canvas element directly
+        // Canvas captured tracking stream at high quality scale parameters
         const cStr = cv.captureStream(30);
         mStr = new MediaStream();
         
@@ -196,14 +196,23 @@
             const blob = new Blob(chunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = "high_quality_canvas_reaction.webm";
+            a.href = url; a.download = "high_quality_reaction.webm";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url); st.innerText = "Saved smoothly to Downloads folder.";
         };
 
         recorder.start(1000);
         rBtn.style.display = 'none';
+        sBtn.style.display = 'inline-block';
         st.innerText = "🔴 RECORDING HIGH-QUALITY PREVIEW CANVAS.";
+    });
+
+    sBtn.addEventListener('click', () => {
+        recorder.stop();
+        if(worker) worker.postMessage('stop');
+        if (audioCtx) audioCtx.close();
+        sBtn.style.display = 'none';
+        rBtn.style.display = 'inline-block';
     });
 </script>
 
