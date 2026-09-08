@@ -47,7 +47,7 @@
     bVid.muted = true; bVid.autoplay = true; bVid.playsInline = true;
     oVid.muted = true; oVid.autoplay = true; oVid.playsInline = true;
 
-    let bStr, oStr, aStr, mStr, recorder, worker, audioCtx, audioDestination;
+    let bStr, oStr, aStr, mStr, recorder, worker;
     let chunks = [];
 
     pBtn.addEventListener('click', async () => {
@@ -83,9 +83,14 @@
             st.innerText = "Configuring unthrottled hardware buffers...";
             if(worker) worker.terminate();
 
-            // Open microphone channel
+            // Open microphone channel with explicit hardware parameter overrides
             aStr = await navigator.mediaDevices.getUserMedia({
-                audio: { deviceId: { exact: aSel.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+                audio: { 
+                    deviceId: { exact: aSel.value }, 
+                    echoCancellation: false, 
+                    noiseSuppression: false, 
+                    autoGainControl: false 
+                }
             });
 
             // Open webcam feed cleanly
@@ -94,33 +99,20 @@
             });
             oVid.srcObject = oStr; await oVid.play();
 
-            // GPU Screen Grab with enabled system track audio channels
+            // THE TAB AUDIO ANTI-SUPPRESSION LOCK:
+            // We explicitly force echoCancellation and noiseSuppression to FALSE 
+            // inside the display media audio tracks block. This bypasses the WebRTC communication 
+            // layer filters completely, telling ChromeOS to deliver the raw digital sound properties.
             bStr = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-                audio: true // Enabled so Chrome prompts you to share system/tab sound
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    suppressLocalAudioPlayback: false
+                }
             });
             bVid.srcObject = bStr; await bVid.play();
-
-            // CORE AUDIO MIXER & BOOSTER SYSTEM
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            audioDestination = audioCtx.createMediaStreamDestination();
-
-            // Map microphone input stream into mixing board
-            const micSource = audioCtx.createMediaStreamSource(aStr);
-            micSource.connect(audioDestination);
-
-            // Check if user actively ticked the "Share tab audio" box
-            if (bStr.getAudioTracks().length > 0) {
-                const tabAudioSource = audioCtx.createMediaStreamSource(bStr);
-                
-                // Build a virtual gain amplifier box
-                const tabGainNode = audioCtx.createGain();
-                tabGainNode.gain.value = 1.8; // Boosts the stream video volume by 80%
-                
-                // Route stream sound -> through amplifier -> directly into final recorder file
-                tabAudioSource.connect(tabGainNode);
-                tabGainNode.connect(audioDestination);
-            }
 
             const workerCode = `
                 let timer = null;
@@ -156,14 +148,15 @@
         chunks = [];
         const cStr = cv.captureStream(30);
         mStr = new MediaStream();
+        
         cStr.getVideoTracks().forEach(t => mStr.addTrack(t));
         
-        // Feed our boosted master audio mixer stream to the recording pipeline
-        audioDestination.stream.getAudioTracks().forEach(t => mStr.addTrack(t));
+        // Feed raw un-suppressed tracks straight into the compiler pipeline
+        aStr.getAudioTracks().forEach(t => mStr.addTrack(t));
+        if (bStr && bStr.getAudioTracks().length > 0) {
+            bStr.getAudioTracks().forEach(t => mStr.addTrack(t));
+        }
 
-        // OPTIMIZED BITRATE MIX PROFILE:
-        // Set to 2.6 Mbps to clean up all compression pixel noise while remaining 
-        // light enough for the Intel Quick Sync chip to handle with 0% CPU lag.
         let opt = { 
             mimeType: 'video/webm;codecs=vp8,opus',
             videoBitsPerSecond: 2600000 
@@ -179,7 +172,7 @@
             const blob = new Blob(chunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = "crisp_hd_reaction.webm";
+            a.href = url; a.download = "unsuppressed_hd_reaction.webm";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url); st.innerText = "Completed HD file saved directly to Downloads.";
         };
@@ -187,18 +180,18 @@
         recorder.start(1000);
         rBtn.style.display = 'none';
         sBtn.style.display = 'inline-block';
-        st.innerText = "🔴 RECORDING LIVE THROUGH NATIVE GPU PIPELINES.";
+        st.innerText = "🔴 RECORDING LIVE (Tab Audio Filters Disabled).";
     });
 
     sBtn.addEventListener('click', () => {
         recorder.stop();
         if(worker) worker.postMessage('stop');
-        if (audioCtx) audioCtx.close();
         st.innerText = "Compiling crisp output track...";
         sBtn.style.display = 'none';
         rBtn.style.display = 'inline-block';
     });
 </script>
+
 
 </body>
 </html>
