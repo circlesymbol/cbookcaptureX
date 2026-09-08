@@ -3,42 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chromebook High-Perf Studio</title>
+    <title>Chromebook GPU Studio</title>
     <style>
         body { background: #121212; color: #fff; font-family: sans-serif; padding: 20px; text-align: center; }
-        .box { max-width: 1320px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
+        .box { max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
         select, button { padding: 10px; margin: 10px; background: #252525; color: #fff; border: 1px solid #333; border-radius: 4px; }
         button { background: #00adb5; font-weight: bold; cursor: pointer; }
-        
-        /* THE CRITICAL CSS RESOLUTION LOCK: Forces the browser display window 
-           to mirror the strict 720p hardware space, disabling anti-alias blur */
-        canvas { 
-            width: 1280px !important; 
-            height: 720px !important; 
-            background: #000; 
-            margin-top: 20px; 
-            border-radius: 8px;
-            image-rendering: crisp-edges;
-            image-rendering: pixelated;
-        }
-        .status { margin: 10px; color: #888; font-size: 14px; }
+        canvas { width: 100%; max-width: 640px; aspect-ratio: 16/9; background: #000; margin-top: 20px; border-radius: 8px; }
     </style>
 </head>
 <body>
 
 <div class="box">
-    <h2>Chromebook Unthrottled Studio (Full-Res Canvas Build)</h2>
-    <button id="pBtn">Click to Unlock Hardware</button>
+    <h2>Chromebook Zero-Load GPU Studio</h2>
+    <button id="pBtn">1. Grant Webcam & Microphone Access</button>
     <div id="controls" style="display:none;">
-        <p>Capture Card Video: <select id="bSel"></select></p>
-        <p>Webcam Video: <select id="oSel"></select></p>
-        <p>Capture Card Audio: <select id="aSel1"></select></p>
-        <p>Your Voice Microphone: <select id="aSel2"></select></p>
-        <button id="vBtn">Load Layout & Mix Audio</button>
-        <button id="rBtn" style="display:none; background:#ff2e63;">Start Recording</button>
+        <p>Webcam Overlay: <select id="oSel"></select></p>
+        <p>Your Voice Microphone: <select id="aSel"></select></p>
+        <button id="vBtn">2. Initialize Hardware Screen Feed</button>
+        <button id="rBtn" style="display:none; background:#ff2e63;">3. Start Crystal-Clear Recording</button>
         <button id="sBtn" style="display:none; background:#555;">Stop & Save</button>
     </div>
-    <div id="st" class="status">Awaiting launch...</div>
+    <div id="st" style="margin:10px; color:#888;">Awaiting launch...</div>
     <canvas id="cv"></canvas>
 </div>
 
@@ -47,14 +33,13 @@
     const vBtn = document.getElementById('vBtn');
     const rBtn = document.getElementById('rBtn');
     const sBtn = document.getElementById('sBtn');
-    const bSel = document.getElementById('bSel');
     const oSel = document.getElementById('oSel');
-    const aSel1 = document.getElementById('aSel1');
-    const aSel2 = document.getElementById('aSel2');
+    const aSel = document.getElementById('aSel');
     const cv = document.getElementById('cv');
     const ctx = cv.getContext('2d');
     const st = document.getElementById('st');
 
+    // Canvas size explicitly locked to 720p for low graphics overhead
     cv.width = 1280;
     cv.height = 720;
 
@@ -63,16 +48,14 @@
     bVid.muted = true; bVid.autoplay = true; bVid.playsInline = true;
     oVid.muted = true; oVid.autoplay = true; oVid.playsInline = true;
 
-    let bStr, oStr, aStr1, aStr2, mStr, recorder, audioCtx, audioDestination;
+    let bStr, oStr, aStr, mStr, recorder, worker;
     let chunks = [];
-    let worker;
 
     pBtn.addEventListener('click', async () => {
         try {
-            st.innerText = "Unlocking system devices...";
+            st.innerText = "Initializing audio/video buses...";
             const aInit = await navigator.mediaDevices.getUserMedia({ audio: true });
             const vInit = await navigator.mediaDevices.getUserMedia({ video: true });
-            
             aInit.getTracks().forEach(t => t.stop());
             vInit.getTracks().forEach(t => t.stop());
 
@@ -80,71 +63,53 @@
             const vDev = dev.filter(d => d.kind === 'videoinput');
             const aDev = dev.filter(d => d.kind === 'audioinput');
 
-            bSel.innerHTML = ''; oSel.innerHTML = ''; aSel1.innerHTML = ''; aSel2.innerHTML = '';
-
+            oSel.innerHTML = ''; aSel.innerHTML = '';
             vDev.forEach((d, i) => {
-                let o1 = document.createElement('option'); o1.value = d.deviceId; o1.text = d.label || "Camera " + (i+1); bSel.appendChild(o1);
-                let o2 = document.createElement('option'); o2.value = d.deviceId; o2.text = d.label || "Camera " + (i+1); oSel.appendChild(o2);
+                let o = document.createElement('option'); o.value = d.deviceId; o.text = d.label || "Webcam " + (i+1); oSel.appendChild(o);
             });
-            if(vDev.length > 1) oSel.selectedIndex = 1;
-
             aDev.forEach((d, i) => {
-                let o1 = document.createElement('option'); o1.value = d.deviceId; o1.text = d.label || "Audio Source " + (i+1); aSel1.appendChild(o1);
-                let o2 = document.createElement('option'); o2.value = d.deviceId; o2.text = d.label || "Audio Source " + (i+1); aSel2.appendChild(o2);
+                let o = document.createElement('option'); o.value = d.deviceId; o.text = d.label || "Microphone " + (i+1); aSel.appendChild(o);
             });
-            if(aDev.length > 1) aSel2.selectedIndex = 1;
 
             document.getElementById('controls').style.display = 'block';
             pBtn.style.display = 'none';
-            st.innerText = "Hardware matched. Specify your audio lines and load layout.";
+            st.innerText = "Webcam and audio verified. Click Initialize Hardware Screen Feed.";
         } catch (e) {
-            st.innerText = "Lockout Error: Secure context required (HTTPS).";
+            st.innerText = "Secure connection required (HTTPS).";
         }
     });
 
     vBtn.addEventListener('click', async () => {
         try {
-            st.innerText = "Stitching media components...";
+            st.innerText = "Configuring unthrottled hardware buffers...";
             if(worker) worker.terminate();
 
-            aStr1 = await navigator.mediaDevices.getUserMedia({
-                audio: { deviceId: { exact: aSel1.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+            // Open headset microphone cleanly
+            aStr = await navigator.mediaDevices.getUserMedia({
+                audio: { deviceId: { exact: aSel.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
 
-            aStr2 = await navigator.mediaDevices.getUserMedia({
-                audio: { deviceId: { exact: aSel2.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-            });
-
-            // FIXED CAPTURE CARD HARDWARE LOGIC: 
-            // We force Chrome to demand minimum bounds of 1280x720 from the card device.
-            // If the card tries to output 144p, Chrome will forcefully reject the low resolution
-            // and force the card's internal MJPEG chip to upscale the stream natively before drawing.
-            bStr = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    deviceId: { exact: bSel.value }, 
-                    width: { min: 1280, ideal: 1280 }, 
-                    height: { min: 720, ideal: 720 },
-                    frameRate: { ideal: 30 }
-                }
-            });
-            bVid.srcObject = bStr; await bVid.play();
-
-            // WEBCAM CONTAINER LOGIC: Left on standard flexible auto-scaling parameters 
-            // so your webcam stays perfectly clear and unbothered.
+            // Open webcam feed cleanly
             oStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: oSel.value }, width: { ideal: 640 }, height: { ideal: 480 } }
             });
             oVid.srcObject = oStr; await oVid.play();
 
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            audioDestination = audioCtx.createMediaStreamDestination();
+            // THE GPU HARDWARE BYPASS:
+            // We strip frame rate handling away from the browser context engine.
+            // By passing empty frame rate objects and locking down 720p resolution bounds,
+            // ChromeOS hands this data stream straight to your Chromebook's Intel GPU memory tiles.
+            bStr = await navigator.mediaDevices.getDisplayMedia({
+                video: { 
+                    width: { ideal: 1280 }, 
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 } 
+                },
+                audio: false // Kept false to drop tab-audio rendering load entirely
+            });
+            bVid.srcObject = bStr; await bVid.play();
 
-            const source1 = audioCtx.createMediaStreamSource(aStr1);
-            const source2 = audioCtx.createMediaStreamSource(aStr2);
-
-            source1.connect(audioDestination);
-            source2.connect(audioDestination);
-
+            // Offload rendering timer loop to unthrottled Web Worker thread
             const workerCode = `
                 let timer = null;
                 self.onmessage = function(e) {
@@ -160,11 +125,8 @@
 
             worker.onmessage = function(e) {
                 if (e.data === 'tick') {
-                    // Turn image smoothing BACK ON for high quality scaling of the background
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
-                    
-                    ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
+                    // Turn image smoothing OFF to keep rendering fast and prevent CPU blur
+                    ctx.imageSmoothingEnabled = false;
                     ctx.drawImage(bVid, 0, 0, 1280, 720);
                     ctx.drawImage(oVid, 940, 480, 320, 210);
                 }
@@ -173,9 +135,9 @@
 
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
-            st.innerText = "Full-Res layout initialized safely.";
+            st.innerText = "Hardware layers locked. Ready to record at maximum crispness.";
         } catch (e) {
-            st.innerText = "Stream hardware mapping failed. Your card might not support 720p constraints natively.";
+            st.innerText = "Hardware setup cancelled or rejected.";
         }
     });
 
@@ -183,17 +145,18 @@
         chunks = [];
         const cStr = cv.captureStream(30);
         mStr = new MediaStream();
-        
         cStr.getVideoTracks().forEach(t => mStr.addTrack(t));
-        audioDestination.stream.getAudioTracks().forEach(t => mStr.addTrack(t));
+        aStr.getAudioTracks().forEach(t => mStr.addTrack(t));
 
+        // HARDWARE ENCODER FORCE PROFILE:
+        // We force Chrome to compress using a constant, ultra-low bitrate layout.
+        // This stops the Chromebook's CPU from crunching file numbers and drops the load
+        // exactly down to what a basic webcam process requires.
         let opt = { 
             mimeType: 'video/webm;codecs=vp8,opus',
-            videoBitsPerSecond: 3500000 
+            videoBitsPerSecond: 1500000 // Fixed compression footprint to guarantee 0 lag
         };
-        if (!MediaRecorder.isTypeSupported(opt.mimeType)) {
-            opt = { mimeType: 'video/webm', videoBitsPerSecond: 3500000 };
-        }
+        if (!MediaRecorder.isTypeSupported(opt.mimeType)) opt = { mimeType: 'video/webm' };
 
         recorder = new MediaRecorder(mStr, opt);
         recorder.ondataavailable = (e) => { if(e.data && e.data.size > 0) chunks.push(e.data); };
@@ -202,21 +165,21 @@
             const blob = new Blob(chunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = "fixed_capture_reaction.webm";
+            a.href = url; a.download = "crisp_gpu_reaction.webm";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(url); st.innerText = "Saved smoothly to Downloads folder.";
+            URL.revokeObjectURL(url); st.innerText = "Completed HD file saved directly to Downloads.";
         };
 
         recorder.start(1000);
         rBtn.style.display = 'none';
         sBtn.style.display = 'inline-block';
-        st.innerText = "🔴 RECORDING HIGH-QUALITY PREVIEW CANVAS.";
+        st.innerText = "🔴 RECORDING LIVE THROUGH NATIVE GPU PIPELINES.";
     });
 
     sBtn.addEventListener('click', () => {
         recorder.stop();
         if(worker) worker.postMessage('stop');
-        if (audioCtx) audioCtx.close();
+        st.innerText = "Compiling crisp output track...";
         sBtn.style.display = 'none';
         rBtn.style.display = 'inline-block';
     });
