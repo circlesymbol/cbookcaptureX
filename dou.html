@@ -3,19 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chromebook Native Studio</title>
+    <title>Chromebook High-Perf Studio</title>
     <style>
         body { background: #121212; color: #fff; font-family: sans-serif; padding: 20px; text-align: center; }
-        .box { max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
+        .box { max-width: 1320px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
         select, button { padding: 10px; margin: 10px; background: #252525; color: #fff; border: 1px solid #333; border-radius: 4px; }
         button { background: #00adb5; font-weight: bold; cursor: pointer; }
-        canvas { width: 100%; max-width: 640px; aspect-ratio: 16/9; background: #000; margin-top: 20px; }
+        
+        /* HIGH-QUALITY PREVIEW FIX: Forces the browser display window to match 
+           the exact 720p drawing resolution, disabling anti-alias blur entirely */
+        canvas { 
+            width: 1280px; 
+            height: 720px; 
+            background: #000; 
+            margin-top: 20px; 
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .status { margin: 10px; color: #888; font-size: 14px; }
     </style>
 </head>
 <body>
 
 <div class="box">
-    <h2>Chromebook Native Stream Recorder (No Canvas-Cap)</h2>
+    <h2>Chromebook Unthrottled Studio (High-Quality Preview Build)</h2>
     <button id="pBtn">Click to Unlock Hardware</button>
     <div id="controls" style="display:none;">
         <p>Capture Card Video: <select id="bSel"></select></p>
@@ -26,7 +41,7 @@
         <button id="rBtn" style="display:none; background:#ff2e63;">Start Recording</button>
         <button id="sBtn" style="display:none; background:#555;">Stop & Save</button>
     </div>
-    <div id="st" style="margin:10px; color:#888;">Awaiting launch...</div>
+    <div id="st" class="status">Awaiting launch...</div>
     <canvas id="cv"></canvas>
 </div>
 
@@ -43,6 +58,7 @@
     const ctx = cv.getContext('2d');
     const st = document.getElementById('st');
 
+    // Drawing matrix properties locked to clean 1280x720 space
     cv.width = 1280;
     cv.height = 720;
 
@@ -51,7 +67,7 @@
     bVid.muted = true; bVid.autoplay = true; bVid.playsInline = true;
     oVid.muted = true; oVid.autoplay = true; oVid.playsInline = true;
 
-    let bStr, oStr, aStr1, aStr2, recorder, audioCtx, audioDestination;
+    let bStr, oStr, aStr1, aStr2, mStr, recorder, audioCtx, audioDestination;
     let chunks = [];
     let worker;
 
@@ -109,7 +125,7 @@
             bVid.srcObject = bStr; await bVid.play();
 
             oStr = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: oSel.value }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                video: { deviceId: { exact: oSel.value }, width: { ideal: 640 }, height: { ideal: 480 } }
             });
             oVid.srcObject = oStr; await oVid.play();
 
@@ -137,18 +153,19 @@
 
             worker.onmessage = function(e) {
                 if (e.data === 'tick') {
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
+                    // Turn on crisp pixel settings on the rendering context layer
+                    ctx.imageSmoothingEnabled = false;
+                    
                     ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
                     ctx.drawImage(bVid, 0, 0, 1280, 720);
-                    ctx.drawImage(oVid, 940, 490, 496, 240);
+                    ctx.drawImage(oVid, 940, 480, 320, 210);
                 }
             };
             worker.postMessage('start');
 
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
-            st.innerText = "Layout rendering smoothly.";
+            st.innerText = "High-Quality Preview layout loaded cleanly.";
         } catch (e) {
             st.innerText = "Stream hardware mapping failed.";
         }
@@ -157,46 +174,36 @@
     rBtn.addEventListener('click', () => {
         chunks = [];
         
-        // FIXED RECORDING ENGINE: Instead of capturing the blurry preview canvas,
-        // we feed the raw, high-resolution background video track directly from 
-        // the hardware stream line straight into the encoder!
-        const recordingStream = new MediaStream();
+        // Target the newly sharpened and expanded high-quality canvas element directly
+        const cStr = cv.captureStream(30);
+        mStr = new MediaStream();
         
-        bStr.getVideoTracks().forEach(t => recordingStream.addTrack(t));
-        audioDestination.stream.getAudioTracks().forEach(t => recordingStream.addTrack(t));
+        cStr.getVideoTracks().forEach(t => mStr.addTrack(t));
+        audioDestination.stream.getAudioTracks().forEach(t => mStr.addTrack(t));
 
         let opt = { 
             mimeType: 'video/webm;codecs=vp8,opus',
-            videoBitsPerSecond: 4000000 // Upped to 4Mbps for native crisp playback
+            videoBitsPerSecond: 3500000 // Lock compression to 3.5Mbps to preserve the canvas pixel structure
         };
         if (!MediaRecorder.isTypeSupported(opt.mimeType)) {
-            opt = { mimeType: 'video/webm', videoBitsPerSecond: 4000000 };
+            opt = { mimeType: 'video/webm', videoBitsPerSecond: 3500000 };
         }
 
-        recorder = new MediaRecorder(recordingStream, opt);
+        recorder = new MediaRecorder(mStr, opt);
         recorder.ondataavailable = (e) => { if(e.data && e.data.size > 0) chunks.push(e.data); };
         
         recorder.onstop = () => {
             const blob = new Blob(chunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = "native_reaction_hd.webm";
+            a.href = url; a.download = "high_quality_canvas_reaction.webm";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(url); st.innerText = "Saved to Downloads.";
+            URL.revokeObjectURL(url); st.innerText = "Saved smoothly to Downloads folder.";
         };
 
         recorder.start(1000);
         rBtn.style.display = 'none';
-        sBtn.style.display = 'inline-block';
-        st.innerText = "🔴 RECORDING NATIVE HD SOURCE VIDEO.";
-    });
-
-    sBtn.addEventListener('click', () => {
-        recorder.stop();
-        if(worker) worker.postMessage('stop');
-        if (audioCtx) audioCtx.close();
-        sBtn.style.display = 'none';
-        rBtn.style.display = 'inline-block';
+        st.innerText = "🔴 RECORDING HIGH-QUALITY PREVIEW CANVAS.";
     });
 </script>
 
