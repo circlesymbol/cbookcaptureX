@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chromebook Background-Safe Studio</title>
+    <title>Chromebook Unthrottled Studio</title>
     <style>
         body { background: #121212; color: #fff; font-family: sans-serif; padding: 20px; text-align: center; }
         .box { max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
@@ -15,7 +15,7 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Background-Safe Recorder</h2>
+    <h2>Chromebook Unthrottled Studio</h2>
     <button id="pBtn">Click to Unlock Hardware</button>
     <div id="controls" style="display:none;">
         <p>Capture Card Video: <select id="bSel"></select></p>
@@ -53,7 +53,7 @@
 
     let bStr, oStr, aStr1, aStr2, mStr, recorder, audioCtx, audioDestination;
     let chunks = [];
-    let loopId; // This now holds our background interval timer
+    let worker; // This will hold our background thread
 
     pBtn.addEventListener('click', async () => {
         try {
@@ -93,7 +93,7 @@
     vBtn.addEventListener('click', async () => {
         try {
             st.innerText = "Stitching media components...";
-            if(loopId) clearInterval(loopId); // Clear any old intervals safely
+            if(worker) worker.terminate();
 
             aStr1 = await navigator.mediaDevices.getUserMedia({
                 audio: { deviceId: { exact: aSel1.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
@@ -121,14 +121,31 @@
 
             source1.connect(audioDestination);
             source2.connect(audioDestination);
+            source1.connect(audioCtx.destination); // Send copy to your headphone jack line
 
-            // FIXED BACKGROUND DRAWING ENGINE
-            // Fires exactly every 33 milliseconds (~30 FPS) regardless of window focus
-            loopId = setInterval(() => {
-                ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
-                ctx.drawImage(bVid, 0, 0, 1280, 720);
-                ctx.drawImage(oVid, 940, 480, 320, 210);
-            }, 33);
+            // INLINE WEB WORKER CREATION (Bypasses background timer clamps)
+            const workerCode = `
+                let timer = null;
+                self.onmessage = function(e) {
+                    if (e.data === 'start') {
+                        timer = setInterval(() => { self.postMessage('tick'); }, 33);
+                    } else if (e.data === 'stop') {
+                        clearInterval(timer);
+                    }
+                };
+            `;
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            worker = new Worker(URL.createObjectURL(blob));
+
+            // Listen to the un-throttled thread worker to render your graphics frames
+            worker.onmessage = function(e) {
+                if (e.data === 'tick') {
+                    ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
+                    ctx.drawImage(bVid, 0, 0, 1280, 720);
+                    ctx.drawImage(oVid, 940, 480, 320, 210);
+                }
+            };
+            worker.postMessage('start');
 
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
@@ -164,11 +181,12 @@
         recorder.start(1000);
         rBtn.style.display = 'none';
         sBtn.style.display = 'inline-block';
-        st.innerText = "🔴 LIVE RECORDING ACTIVE (Background safe loop running).";
+        st.innerText = "🔴 UNTHROTTLED BACKGROUND RECORDING ACTIVE.";
     });
 
     sBtn.addEventListener('click', () => {
         recorder.stop();
+        if(worker) worker.postMessage('stop');
         if (audioCtx) audioCtx.close();
         sBtn.style.display = 'none';
         rBtn.style.display = 'inline-block';
