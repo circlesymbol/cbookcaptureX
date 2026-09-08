@@ -15,7 +15,7 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Zero-Load GPU Studio (Fixed Audio Build)</h2>
+    <h2>Chromebook Zero-Load GPU Studio (Audio Awake Build)</h2>
     <button id="pBtn">1. Grant Webcam & Microphone Access</button>
     <div id="controls" style="display:none;">
         <p>Webcam Overlay: <select id="oSel"></select></p>
@@ -99,22 +99,26 @@
             });
             oVid.srcObject = oStr; await oVid.play();
 
-            // FIXED HANDSHAKE CRASH: Removed the nested brackets to pass raw clean format properties.
-            // This satisfies the browser validator so the streaming popup loads perfectly.
+            // Load screen capture interface
             bStr = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
                 audio: {
                     echoCancellation: false,
                     noiseSuppression: false,
-                    autoGainControl: false,
-                    channelCount: 2
+                    autoGainControl: false
                 }
             });
             bVid.srcObject = bStr; await bVid.play();
 
-            // LIGHTWEIGHT ISOLATED BOOSTER ENGINE
+            // AUDIO ENGINE WAKE-UP FIX:
+            // We initialize the context and immediately force it to resume() on the click event thread.
+            // This prevents the browser from putting the stream to sleep and cutting off your sound completely!
             if (bStr && bStr.getAudioTracks().length > 0) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume();
+                }
+                
                 const tabAudioSource = audioCtx.createMediaStreamSource(bStr);
                 const audioDestination = audioCtx.createMediaStreamDestination();
                 
