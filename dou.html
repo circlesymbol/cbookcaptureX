@@ -55,7 +55,6 @@
     const ctx = cv.getContext('2d');
     const st = document.getElementById('st');
 
-    // Drawing matrix properties locked to clean 1280x720 space
     cv.width = 1280;
     cv.height = 720;
 
@@ -116,16 +115,26 @@
                 audio: { deviceId: { exact: aSel2.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
 
-            // Width constraints defined explicitly inside target media stream requests
+            // FIXED CAPTURE CARD HARDWARE LOGIC: 
+            // We force Chrome to demand minimum bounds of 1280x720 from the card device.
+            // If the card tries to output 144p, Chrome will forcefully reject the low resolution
+            // and force the card's internal MJPEG chip to upscale the stream natively before drawing.
             bStr = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: bSel.value }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                video: { 
+                    deviceId: { exact: bSel.value }, 
+                    width: { min: 1280, ideal: 1280 }, 
+                    height: { min: 720, ideal: 720 },
+                    frameRate: { ideal: 30 }
+                }
             });
-            bVid.srcObject = bStr; window.bVidStream = bStr; bVid.play();
+            bVid.srcObject = bStr; await bVid.play();
 
+            // WEBCAM CONTAINER LOGIC: Left on standard flexible auto-scaling parameters 
+            // so your webcam stays perfectly clear and unbothered.
             oStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: oSel.value }, width: { ideal: 640 }, height: { ideal: 480 } }
             });
-            oVid.srcObject = oStr; window.oVidStream = oStr; oVid.play();
+            oVid.srcObject = oStr; await oVid.play();
 
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             audioDestination = audioCtx.createMediaStreamDestination();
@@ -151,12 +160,11 @@
 
             worker.onmessage = function(e) {
                 if (e.data === 'tick') {
-                    // Turn off image scaling smoothing interpolation on the context drawing layer
-                    ctx.imageSmoothingEnabled = false;
+                    // Turn image smoothing BACK ON for high quality scaling of the background
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
                     
                     ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
-                    
-                    // Maps video components to full 1:1 scale geometry bounds on canvas screen
                     ctx.drawImage(bVid, 0, 0, 1280, 720);
                     ctx.drawImage(oVid, 940, 480, 320, 210);
                 }
@@ -167,14 +175,12 @@
             rBtn.style.display = 'inline-block';
             st.innerText = "Full-Res layout initialized safely.";
         } catch (e) {
-            st.innerText = "Stream hardware mapping failed.";
+            st.innerText = "Stream hardware mapping failed. Your card might not support 720p constraints natively.";
         }
     });
 
     rBtn.addEventListener('click', () => {
         chunks = [];
-        
-        // Canvas captured tracking stream at high quality scale parameters
         const cStr = cv.captureStream(30);
         mStr = new MediaStream();
         
@@ -183,7 +189,7 @@
 
         let opt = { 
             mimeType: 'video/webm;codecs=vp8,opus',
-            videoBitsPerSecond: 3500000 // Lock compression to 3.5Mbps to preserve the canvas pixel structure
+            videoBitsPerSecond: 3500000 
         };
         if (!MediaRecorder.isTypeSupported(opt.mimeType)) {
             opt = { mimeType: 'video/webm', videoBitsPerSecond: 3500000 };
@@ -196,7 +202,7 @@
             const blob = new Blob(chunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = "high_quality_reaction.webm";
+            a.href = url; a.download = "fixed_capture_reaction.webm";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url); st.innerText = "Saved smoothly to Downloads folder.";
         };
