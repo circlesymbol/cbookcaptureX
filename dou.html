@@ -125,7 +125,7 @@
 
     <div class="btn-group">
         <button id="startPreviewBtn" disabled>2. Start Canvas Layout</button>
-        <button id="recordBtn" class="recording" style="display:none;">3. Start 1080p Recording</button>
+        <button id="recordBtn" style="display:none;">3. Start 1080p Recording</button>
         <button id="stopBtn" style="display:none; background:#555;">Stop & Save</button>
     </div>
 
@@ -145,7 +145,6 @@
     const ctx = canvas.getContext('2d');
     const statusText = document.getElementById('statusText');
 
-    // Force crisp 1080p canvas properties
     canvas.width = 1920;
     canvas.height = 1080;
 
@@ -159,19 +158,16 @@
     let recordedChunks = [];
     let animationFrameId;
 
-    // 1. Initial Device Permission Setup
     permBtn.addEventListener('click', async () => {
         try {
             statusText.innerText = "Requesting device locks...";
-            // Prompt user for baseline access
             const initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            initStream.getTracks().forEach(track => track.stop()); // Flush temp tracks
+            initStream.getTracks().forEach(track => track.stop());
             
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
             const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-            // Populate Dropdowns
             bgSelect.innerHTML = '';
             overlaySelect.innerHTML = '';
             audioSelect.innerHTML = '';
@@ -188,7 +184,6 @@
                 overlaySelect.appendChild(opt2);
             });
 
-            // Default order offset if two distinct cameras are present
             if(videoDevices.length > 1) overlaySelect.selectedIndex = 1;
 
             audioDevices.forEach((device, index) => {
@@ -198,7 +193,6 @@
                 audioSelect.appendChild(opt);
             });
 
-            // Enable Control Panels
             bgSelect.disabled = false;
             overlaySelect.disabled = false;
             audioSelect.disabled = false;
@@ -210,13 +204,11 @@
         }
     });
 
-    // 2. Map Devices to Single Layer Loop
     startPreviewBtn.addEventListener('click', async () => {
         try {
             statusText.innerText = "Configuring media streams...";
             if(animationFrameId) cancelAnimationFrame(animationFrameId);
 
-            // Bypasses ChromeOS forced audio suppression/echo limits natively
             audioStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     deviceId: { exact: audioSelect.value },
@@ -227,7 +219,7 @@
             });
 
             bgStream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: bgSelect.value }, width: 1920, height: 1080 }
+                video: { deviceId: { exact: bgSelect.value }, width: 1280, height: 720 }
             });
             bgVideo.srcObject = bgStream;
             await bgVideo.play();
@@ -238,19 +230,11 @@
             overlayVideo.srcObject = overlayStream;
             await overlayVideo.play();
 
-            // Run structural Canvas merge loop
             function render() {
-                // Clear Canvas
                 ctx.fillStyle = '#000000';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Draw Capture Card background (Layer 1)
                 ctx.drawImage(bgVideo, 0, 0, 1920, 1080);
-                
-                // Draw Webcam PIP overlay in bottom corner (Layer 2)
-                // Coordinates: X=1480, Y=740, Width=400, Height=300 (Keeps 16:9 safezone)
                 ctx.drawImage(overlayVideo, 1480, 740, 400, 300);
-                
                 animationFrameId = requestAnimationFrame(render);
             }
             render();
@@ -259,3 +243,24 @@
             recordBtn.style.display = 'inline-block';
             statusText.innerText = "Preview Active. Ready to capture.";
         } catch (err) {
+            statusText.innerText = `Stream Setup Error: ${err.message}`;
+        }
+    });
+
+    recordBtn.addEventListener('click', () => {
+        recordedChunks = [];
+        const canvasStream = canvas.captureStream(30); 
+        mixedStream = new MediaStream();
+        
+        canvasStream.getVideoTracks().forEach(track => mixedStream.addTrack(track));
+        audioStream.getAudioTracks().forEach(track => mixedStream.addTrack(track));
+
+        let options = { mimeType: 'video/webm;codecs=vp8,opus' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'video/webm' };
+        }
+
+        mediaRecorder = new MediaRecorder(mixedStream, options);
+        
+        mediaRecorder.ondataavailable = (e) => {
+            .if (e.data && e.data.size > 0) recordedChunks.push(e.data);};mediaRecorder.onstop = () => {const blob = new Blob(recordedChunks, { type: 'video/webm' });const url = URL.createObjectURL(blob);const a = document.createElement('a');a.href = url;a.download = reaction_${Date.now()}.webm;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);statusText.innerText = "File compiled and pushed directly to system Downloads.";};mediaRecorder.start(1000);recordBtn.className = 'recording';recordBtn.style.display = 'none';stopBtn.style.display = 'inline-block';statusText.innerText = "🔴 RECORDING LIVE (No Time Cap Active).";});stopBtn.addEventListener('click', () => {mediaRecorder.stop();stopBtn.style.display = 'none';recordBtn.className = '';recordBtn.style.display = 'inline-block';});
