@@ -99,28 +99,29 @@
             });
             oVid.srcObject = oStr; await oVid.play();
 
-            // Tab screen and clean audio channel grab
+            // FIXED NOISE SUPPRESSION GATING:
+            // We force strict browser definitions onto the digital stream audio layer.
+            // By specifying high-fidelity parameters inside the displayMedia request, 
+            // the system stops filtering frequencies and treats it like an untouched stereo track.
             bStr = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
                 audio: {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false,
-                    suppressLocalAudioPlayback: false
+                    echoCancellation: { exact: false },
+                    noiseSuppression: { exact: false },
+                    autoGainControl: { exact: false },
+                    channelCount: 2
                 }
             });
             bVid.srcObject = bStr; await bVid.play();
 
-            // LIGHTWEIGHT ISOLATED BOOSTER ENGINE:
-            // We build an audio context ONLY if the user shared tab audio.
-            // By separating this from the mic line, the CPU doesn't drop frames or get laggy.
+            // LIGHTWEIGHT ISOLATED BOOSTER ENGINE
             if (bStr && bStr.getAudioTracks().length > 0) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const tabAudioSource = audioCtx.createMediaStreamSource(bStr);
                 const audioDestination = audioCtx.createMediaStreamDestination();
                 
                 const tabGainNode = audioCtx.createGain();
-                tabGainNode.gain.value = 2.0; // Forces a 100% clean digital volume boost to the video sound
+                tabGainNode.gain.value = 3.5; // Increased amplifier to 3.5x to combat hidden system volume attenuation
                 
                 tabAudioSource.connect(tabGainNode);
                 tabGainNode.connect(audioDestination);
@@ -159,7 +160,6 @@
     });
 
     rBtn.addEventListener('click', async () => {
-        // Safe-wake the isolated audio context right on user click action
         if (audioCtx && audioCtx.state === 'suspended') {
             await audioCtx.resume();
         }
@@ -173,20 +173,19 @@
         // Push raw microphone audio track cleanly
         aStr.getAudioTracks().forEach(t => mStr.addTrack(t));
         
-        // Push the boosted tab audio track directly into the file stream compiler container
+        // Push the boosted, unsuppressed tab audio track directly into the file stream container
         if (boostedTabAudioStream && boostedTabAudioStream.getAudioTracks().length > 0) {
             boostedTabAudioStream.getAudioTracks().forEach(t => mStr.addTrack(t));
         } else if (bStr && bStr.getAudioTracks().length > 0) {
-            // Fallback to normal track if the booster context fails to bind
             bStr.getAudioTracks().forEach(t => mStr.addTrack(t));
         }
 
         let opt = { 
-            mimeType: 'video/webm;codecs=h264,opus',
-            videoBitsPerSecond: 1800000 
+            mimeType: 'video/webm;codecs=vp8,opus',
+            videoBitsPerSecond: 2600000 
         };
         if (!MediaRecorder.isTypeSupported(opt.mimeType)) {
-            opt = { mimeType: 'video/webm', videoBitsPerSecond: 1800000 };
+            opt = { mimeType: 'video/webm', videoBitsPerSecond: 2600000 };
         }
 
         recorder = new MediaRecorder(mStr, opt);
@@ -196,7 +195,7 @@
             const blob = new Blob(chunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = "boosted_hd_reaction.webm";
+            a.href = url; a.download = "unsuppressed_boosted_reaction.webm";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url); st.innerText = "Completed HD file saved directly to Downloads.";
         };
@@ -207,7 +206,7 @@
         st.innerText = "🔴 RECORDING LIVE (Tab Audio Filters Disabled + Volume Boosted).";
     });
 
-    sBtn.addEventListener('click', () => {
+    sBtn.getElementById('sBtn').addEventListener('click', () => {
         recorder.stop();
         if(worker) worker.postMessage('stop');
         if (audioCtx) audioCtx.close();
@@ -216,8 +215,6 @@
         rBtn.style.display = 'inline-block';
     });
 </script>
-
-
 
 </body>
 </html>
