@@ -3,264 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chromebook Low-Load Reaction Recorder</title>
+    <title>Chromebook Studio</title>
     <style>
-        :root {
-            --bg-color: #121212;
-            --panel-color: #1e1e1e;
-            --accent-color: #00adb5;
-            --text-color: #eeeeee;
-            --record-color: #ff2e63;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .container {
-            max-width: 1280px;
-            width: 100%;
-            background: var(--panel-color);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-        }
-        h1 { margin-top: 0; color: var(--accent-color); font-size: 24px; text-align: center;}
-        .setup-panel {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-            background: rgba(0,0,0,0.2);
-            padding: 15px;
-            border-radius: 8px;
-        }
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        label { font-size: 14px; font-weight: bold; color: #aaa; }
-        select, button {
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #333;
-            background: #252525;
-            color: white;
-            font-size: 14px;
-            outline: none;
-        }
-        select:focus { border-color: var(--accent-color); }
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
-        button {
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.2s ease;
-            background: var(--accent-color);
-            border: none;
-            padding: 12px 24px;
-        }
-        button:hover { opacity: 0.9; transform: translateY(-1px); }
-        button:active { transform: translateY(0); }
-        button.recording {
-            background: var(--record-color);
-            animation: pulse 1.5s infinite;
-        }
-        #previewCanvas {
-            width: 100%;
-            max-width: 1280px;
-            aspect-ratio: 16/9;
-            background: #000;
-            border-radius: 8px;
-            display: block;
-            margin: 0 auto;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-        .status {
-            text-align: center;
-            font-size: 14px;
-            margin-top: 10px;
-            color: #888;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.6; }
-            100% { opacity: 1; }
-        }
+        body { background: #121212; color: #fff; font-family: sans-serif; padding: 20px; text-align: center; }
+        .box { max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
+        select, button { padding: 10px; margin: 10px; background: #252525; color: #fff; border: 1px solid #333; border-radius: 4px; }
+        button { background: #00adb5; font-weight: bold; cursor: pointer; }
+        canvas { width: 100%; max-width: 640px; aspect-ratio: 16/9; background: #000; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>Chromebook Performance Stream Recorder</h1>
-    
-    <div class="btn-group">
-        <button id="permBtn">1. Grant Hardware Permissions</button>
+<div class="box">
+    <h2>Chromebook Unified Recorder</h2>
+    <button id="pBtn">Click to Unlock Hardware</button>
+    <div id="controls" style="display:none;">
+        <p>Capture Card: <select id="bSel"></select></p>
+        <p>Webcam: <select id="oSel"></select></p>
+        <p>Microphone: <select id="aSel"></select></p>
+        <button id="vBtn">Load Layout</button>
+        <button id="rBtn" style="display:none; background:#ff2e63;">Start Recording</button>
+        <button id="sBtn" style="display:none; background:#555;">Stop & Save</button>
     </div>
-
-    <div class="setup-panel">
-        <div class="form-group">
-            <label for="bgVideoSelect">Background (Capture Card)</label>
-            <select id="bgVideoSelect" disabled><option>Grant permissions first...</option></select>
-        </div>
-        <div class="form-group">
-            <label for="overlayVideoSelect">Overlay (Webcam)</label>
-            <select id="overlayVideoSelect" disabled><option>Grant permissions first...</option></select>
-        </div>
-        <div class="form-group">
-            <label for="audioSelect">Microphone Input</label>
-            <select id="audioSelect" disabled><option>Grant permissions first...</option></select>
-        </div>
-    </div>
-
-    <div class="btn-group">
-        <button id="startPreviewBtn" disabled>2. Start Canvas Layout</button>
-        <button id="recordBtn" style="display:none;">3. Start 1080p Recording</button>
-        <button id="stopBtn" style="display:none; background:#555;">Stop & Save</button>
-    </div>
-
-    <canvas id="previewCanvas"></canvas>
-    <div id="statusText" class="status">Waiting for system permissions...</div>
+    <div id="st" style="margin:10px; color:#888;">Awaiting launch...</div>
+    <canvas id="cv"></canvas>
 </div>
 
 <script>
-    const permBtn = document.getElementById('permBtn');
-    const startPreviewBtn = document.getElementById('startPreviewBtn');
-    const recordBtn = document.getElementById('recordBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const bgSelect = document.getElementById('bgVideoSelect');
-    const overlaySelect = document.getElementById('overlayVideoSelect');
-    const audioSelect = document.getElementById('audioSelect');
-    const canvas = document.getElementById('previewCanvas');
-    const ctx = canvas.getContext('2d');
-    const statusText = document.getElementById('statusText');
+    const pBtn = document.getElementById('pBtn');
+    const vBtn = document.getElementById('vBtn');
+    const rBtn = document.getElementById('rBtn');
+    const sBtn = document.getElementById('sBtn');
+    const bSel = document.getElementById('bSel');
+    const oSel = document.getElementById('oSel');
+    const aSel = document.getElementById('aSel');
+    const cv = document.getElementById('cv');
+    const ctx = cv.getContext('2d');
+    const st = document.getElementById('st');
 
-    canvas.width = 1920;
-    canvas.height = 1080;
+    cv.width = 1280;
+    cv.height = 720;
 
-    let bgVideo = document.createElement('video');
-    let overlayVideo = document.createElement('video');
-    bgVideo.muted = true; bgVideo.autoplay = true; bgVideo.playsInline = true;
-    overlayVideo.muted = true; overlayVideo.autoplay = true; overlayVideo.playsInline = true;
+    let bVid = document.createElement('video');
+    let oVid = document.createElement('video');
+    bVid.muted = true; bVid.autoplay = true; bVid.playsInline = true;
+    oVid.muted = true; oVid.autoplay = true; oVid.playsInline = true;
 
-    let bgStream, overlayStream, audioStream, mixedStream;
-    let mediaRecorder;
-    let recordedChunks = [];
-    let animationFrameId;
+    let bStr, oStr, aStr, mStr, recorder;
+    let chunks = [];
+    let loopId;
 
-    permBtn.addEventListener('click', async () => {
+    pBtn.addEventListener('click', async () => {
         try {
-            statusText.innerText = "Requesting device locks...";
-            const initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            initStream.getTracks().forEach(track => track.stop());
+            st.innerText = "Requesting mic permission...";
+            const aInit = await navigator.mediaDevices.getUserMedia({ audio: true });
+            st.innerText = "Requesting cam permission...";
+            const vInit = await navigator.mediaDevices.getUserMedia({ video: true });
             
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(d => d.kind === 'videoinput');
-            const audioDevices = devices.filter(d => d.kind === 'audioinput');
+            aInit.getTracks().forEach(t => t.stop());
+            vInit.getTracks().forEach(t => t.stop());
 
-            bgSelect.innerHTML = '';
-            overlaySelect.innerHTML = '';
-            audioSelect.innerHTML = '';
+            const dev = await navigator.mediaDevices.enumerateDevices();
+            const vDev = dev.filter(d => d.kind === 'videoinput');
+            const aDev = dev.filter(d => d.kind === 'audioinput');
 
-            videoDevices.forEach((device, index) => {
-                let opt1 = document.createElement('option');
-                opt1.value = device.deviceId;
-                opt1.text = device.label || `Camera ${index + 1}`;
-                bgSelect.appendChild(opt1);
+            bSel.innerHTML = ''; oSel.innerHTML = ''; aSel.innerHTML = '';
 
-                let opt2 = document.createElement('option');
-                opt2.value = device.deviceId;
-                opt2.text = device.label || `Camera ${index + 1}`;
-                overlaySelect.appendChild(opt2);
+            vDev.forEach((d, i) => {
+                let o1 = document.createElement('option'); o1.value = d.deviceId; o1.text = d.label || "Camera " + (i+1); bSel.appendChild(o1);
+                let o2 = document.createElement('option'); o2.value = d.deviceId; o2.text = d.label || "Camera " + (i+1); oSel.appendChild(o2);
+            });
+            if(vDev.length > 1) oSel.selectedIndex = 1;
+
+            aDev.forEach((d, i) => {
+                let o = document.createElement('option'); o.value = d.deviceId; o.text = d.label || "Mic " + (i+1); aSel.appendChild(o);
             });
 
-            if(videoDevices.length > 1) overlaySelect.selectedIndex = 1;
-
-            audioDevices.forEach((device, index) => {
-                let opt = document.createElement('option');
-                opt.value = device.deviceId;
-                opt.text = device.label || `Microphone ${index + 1}`;
-                audioSelect.appendChild(opt);
-            });
-
-            bgSelect.disabled = false;
-            overlaySelect.disabled = false;
-            audioSelect.disabled = false;
-            startPreviewBtn.disabled = false;
-            permBtn.style.display = 'none';
-            statusText.innerText = "Devices initialized. Choose your tracks and build layout.";
-        } catch (err) {
-            statusText.innerText = `Hardware Link Error: ${err.message}. Make sure your site runs on HTTPS!`;
+            document.getElementById('controls').style.display = 'block';
+            pBtn.style.display = 'none';
+            st.innerText = "Permissions cleared. Pick inputs and load layout.";
+        } catch (e) {
+            st.innerText = "Lockout Error: Secure context required (HTTPS).";
         }
     });
 
-    startPreviewBtn.addEventListener('click', async () => {
+    vBtn.addEventListener('click', async () => {
         try {
-            statusText.innerText = "Configuring media streams...";
-            if(animationFrameId) cancelAnimationFrame(animationFrameId);
+            st.innerText = "Binding tracks...";
+            if(loopId) cancelAnimationFrame(loopId);
 
-            audioStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    deviceId: { exact: audioSelect.value },
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false
-                }
+            aStr = await navigator.mediaDevices.getUserMedia({
+                audio: { deviceId: { exact: aSel.value }, echoCancellation: false, noiseSuppression: false }
             });
-
-            bgStream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: bgSelect.value }, width: 1280, height: 720 }
+            bStr = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: bSel.value }, width: 1280, height: 720 }
             });
-            bgVideo.srcObject = bgStream;
-            await bgVideo.play();
+            bVid.srcObject = bStr; await bVid.play();
 
-            overlayStream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: overlaySelect.value }, width: 640, height: 480 }
+            oStr = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: oSel.value }, width: 640, height: 480 }
             });
-            overlayVideo.srcObject = overlayStream;
-            await overlayVideo.play();
+            oVid.srcObject = oStr; await oVid.play();
 
-            function render() {
-                ctx.fillStyle = '#000000';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(bgVideo, 0, 0, 1920, 1080);
-                ctx.drawImage(overlayVideo, 1480, 740, 400, 300);
-                animationFrameId = requestAnimationFrame(render);
+            function draw() {
+                ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
+                ctx.drawImage(bVid, 0, 0, 1280, 720);
+                ctx.drawImage(oVid, 940, 480, 320, 210);
+                loopId = requestAnimationFrame(draw);
             }
-            render();
+            draw();
 
-            startPreviewBtn.style.display = 'none';
-            recordBtn.style.display = 'inline-block';
-            statusText.innerText = "Preview Active. Ready to capture.";
-        } catch (err) {
-            statusText.innerText = `Stream Setup Error: ${err.message}`;
+            vBtn.style.display = 'none';
+            rBtn.style.display = 'inline-block';
+            st.innerText = "Feeds linked cleanly.";
+        } catch (e) {
+            st.innerText = "Stream bind failed.";
         }
     });
 
-    recordBtn.addEventListener('click', () => {
-        recordedChunks = [];
-        const canvasStream = canvas.captureStream(30); 
-        mixedStream = new MediaStream();
-        
-        canvasStream.getVideoTracks().forEach(track => mixedStream.addTrack(track));
-        audioStream.getAudioTracks().forEach(track => mixedStream.addTrack(track));
+    rBtn.addEventListener('click', () => {
+        chunks = [];
+        const cStr = cv.captureStream(30);
+        mStr = new MediaStream();
+        cStr.getVideoTracks().forEach(t => mStr.addTrack(t));
+        aStr.getAudioTracks().forEach(t => mStr.addTrack(t));
 
-        let options = { mimeType: 'video/webm;codecs=vp8,opus' };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            options = { mimeType: 'video/webm' };
-        }
+        let opt = { mimeType: 'video/webm;codecs=vp8,opus' };
+        if (!MediaRecorder.isTypeSupported(opt.mimeType)) opt = { mimeType: 'video/webm' };
 
-        mediaRecorder = new MediaRecorder(mixedStream, options);
+        recorder = new MediaRecorder(mStr, opt);
+        recorder.ondataavailable = (e) => { if(e.data && e.data.size > 0) chunks.push(e.data); };
         
-        mediaRecorder.ondataavailable = (e) => {
-            .if (e.data && e.data.size > 0) recordedChunks.push(e.data);};mediaRecorder.onstop = () => {const blob = new Blob(recordedChunks, { type: 'video/webm' });const url = URL.createObjectURL(blob);const a = document.createElement('a');a.href = url;a.download = reaction_${Date.now()}.webm;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);statusText.innerText = "File compiled and pushed directly to system Downloads.";};mediaRecorder.start(1000);recordBtn.className = 'recording';recordBtn.style.display = 'none';stopBtn.style.display = 'inline-block';statusText.innerText = "🔴 RECORDING LIVE (No Time Cap Active).";});stopBtn.addEventListener('click', () => {mediaRecorder.stop();stopBtn.style.display = 'none';recordBtn.className = '';recordBtn.style.display = 'inline-block';});
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = "reaction.webm";
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url); st.innerText = "Saved to Downloads.";
+        };
+
+        recorder.start(1000);
+        rBtn.style.display = 'none';
+        sBtn.style.display = 'inline-block';
+        st.innerText = "RECORDING NOW (No constraints active).";
+    });
+
+    sBtn.addEventListener('click', () => {
+        recorder.stop();
+        sBtn.style.display = 'none';
+        rBtn.style.display = 'inline-block';
+    });
+</script>
+
+</body>
+</html>
