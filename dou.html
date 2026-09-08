@@ -15,7 +15,7 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Unthrottled Studio</h2>
+    <h2>Chromebook Unthrottled Studio (No-Feedback Build)</h2>
     <button id="pBtn">Click to Unlock Hardware</button>
     <div id="controls" style="display:none;">
         <p>Capture Card Video: <select id="bSel"></select></p>
@@ -53,7 +53,7 @@
 
     let bStr, oStr, aStr1, aStr2, mStr, recorder, audioCtx, audioDestination;
     let chunks = [];
-    let worker; // This will hold our background thread
+    let worker;
 
     pBtn.addEventListener('click', async () => {
         try {
@@ -119,11 +119,12 @@
             const source1 = audioCtx.createMediaStreamSource(aStr1);
             const source2 = audioCtx.createMediaStreamSource(aStr2);
 
+            // Connect lines ONLY to the file recorder stream
             source1.connect(audioDestination);
             source2.connect(audioDestination);
-            source1.connect(audioCtx.destination); // Send copy to your headphone jack line
+            
+            // REMOVED audioCtx.destination connection to guarantee 100% silence from the browser tab
 
-            // INLINE WEB WORKER CREATION (Bypasses background timer clamps)
             const workerCode = `
                 let timer = null;
                 self.onmessage = function(e) {
@@ -137,7 +138,6 @@
             const blob = new Blob([workerCode], { type: 'application/javascript' });
             worker = new Worker(URL.createObjectURL(blob));
 
-            // Listen to the un-throttled thread worker to render your graphics frames
             worker.onmessage = function(e) {
                 if (e.data === 'tick') {
                     ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
@@ -149,7 +149,7 @@
 
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
-            st.innerText = "Video canvas rendered & Audio channels mixed perfectly.";
+            st.innerText = "Layout rendered smoothly in silence.";
         } catch (e) {
             st.innerText = "Stream hardware mapping failed.";
         }
@@ -181,7 +181,7 @@
         recorder.start(1000);
         rBtn.style.display = 'none';
         sBtn.style.display = 'inline-block';
-        st.innerText = "🔴 UNTHROTTLED BACKGROUND RECORDING ACTIVE.";
+        st.innerText = "🔴 UNTHROTTLED SILENT CAPTURE ACTIVE.";
     });
 
     sBtn.addEventListener('click', () => {
