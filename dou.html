@@ -15,7 +15,7 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Zero-Load GPU Studio (Audio Booster Build)</h2>
+    <h2>Chromebook Zero-Load GPU Studio (Fixed Audio Build)</h2>
     <button id="pBtn">1. Grant Webcam & Microphone Access</button>
     <div id="controls" style="display:none;">
         <p>Webcam Overlay: <select id="oSel"></select></p>
@@ -99,16 +99,14 @@
             });
             oVid.srcObject = oStr; await oVid.play();
 
-            // FIXED NOISE SUPPRESSION GATING:
-            // We force strict browser definitions onto the digital stream audio layer.
-            // By specifying high-fidelity parameters inside the displayMedia request, 
-            // the system stops filtering frequencies and treats it like an untouched stereo track.
+            // FIXED HANDSHAKE CRASH: Removed the nested brackets to pass raw clean format properties.
+            // This satisfies the browser validator so the streaming popup loads perfectly.
             bStr = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
                 audio: {
-                    echoCancellation: { exact: false },
-                    noiseSuppression: { exact: false },
-                    autoGainControl: { exact: false },
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
                     channelCount: 2
                 }
             });
@@ -121,7 +119,7 @@
                 const audioDestination = audioCtx.createMediaStreamDestination();
                 
                 const tabGainNode = audioCtx.createGain();
-                tabGainNode.gain.value = 3.5; // Increased amplifier to 3.5x to combat hidden system volume attenuation
+                tabGainNode.gain.value = 3.5; // Controls the master audio volume multiplier
                 
                 tabAudioSource.connect(tabGainNode);
                 tabGainNode.connect(audioDestination);
@@ -206,7 +204,7 @@
         st.innerText = "🔴 RECORDING LIVE (Tab Audio Filters Disabled + Volume Boosted).";
     });
 
-    sBtn.getElementById('sBtn').addEventListener('click', () => {
+    sBtn.addEventListener('click', () => {
         recorder.stop();
         if(worker) worker.postMessage('stop');
         if (audioCtx) audioCtx.close();
