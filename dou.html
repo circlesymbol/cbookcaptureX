@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chromebook Dual-Audio Studio</title>
+    <title>Chromebook Background-Safe Studio</title>
     <style>
         body { background: #121212; color: #fff; font-family: sans-serif; padding: 20px; text-align: center; }
         .box { max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
@@ -15,7 +15,7 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Dual-Audio Recorder</h2>
+    <h2>Chromebook Background-Safe Recorder</h2>
     <button id="pBtn">Click to Unlock Hardware</button>
     <div id="controls" style="display:none;">
         <p>Capture Card Video: <select id="bSel"></select></p>
@@ -53,7 +53,7 @@
 
     let bStr, oStr, aStr1, aStr2, mStr, recorder, audioCtx, audioDestination;
     let chunks = [];
-    let loopId;
+    let loopId; // This now holds our background interval timer
 
     pBtn.addEventListener('click', async () => {
         try {
@@ -93,49 +93,42 @@
     vBtn.addEventListener('click', async () => {
         try {
             st.innerText = "Stitching media components...";
-            if(loopId) cancelAnimationFrame(loopId);
+            if(loopId) clearInterval(loopId); // Clear any old intervals safely
 
-            // Pull Audio 1 (Capture Card Audio) - No auto-filters to save crispness
             aStr1 = await navigator.mediaDevices.getUserMedia({
                 audio: { deviceId: { exact: aSel1.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
 
-            // Pull Audio 2 (Your voice Microphone)
             aStr2 = await navigator.mediaDevices.getUserMedia({
                 audio: { deviceId: { exact: aSel2.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
 
-            // Pull Video 1 (Capture Card video input)
             bStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: bSel.value }, width: 1280, height: 720 }
             });
             bVid.srcObject = bStr; await bVid.play();
 
-            // Pull Video 2 (Webcam video input)
             oStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: oSel.value }, width: 640, height: 480 }
             });
             oVid.srcObject = oStr; await oVid.play();
 
-            // VIRTUAL AUDIO MIXING ENGINE BOX
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             audioDestination = audioCtx.createMediaStreamDestination();
 
-            // Map streams into web mixing nodes
             const source1 = audioCtx.createMediaStreamSource(aStr1);
             const source2 = audioCtx.createMediaStreamSource(aStr2);
 
-            // Connect both lines into the single master output track
             source1.connect(audioDestination);
             source2.connect(audioDestination);
 
-            function draw() {
+            // FIXED BACKGROUND DRAWING ENGINE
+            // Fires exactly every 33 milliseconds (~30 FPS) regardless of window focus
+            loopId = setInterval(() => {
                 ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
                 ctx.drawImage(bVid, 0, 0, 1280, 720);
                 ctx.drawImage(oVid, 940, 480, 320, 210);
-                loopId = requestAnimationFrame(draw);
-            }
-            draw();
+            }, 33);
 
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
@@ -150,10 +143,7 @@
         const cStr = cv.captureStream(30);
         mStr = new MediaStream();
         
-        // Push the unified video layout frame track
         cStr.getVideoTracks().forEach(t => mStr.addTrack(t));
-        
-        // Push the mixed master audio track from the virtual mixing box
         audioDestination.stream.getAudioTracks().forEach(t => mStr.addTrack(t));
 
         let opt = { mimeType: 'video/webm;codecs=vp8,opus' };
@@ -174,7 +164,7 @@
         recorder.start(1000);
         rBtn.style.display = 'none';
         sBtn.style.display = 'inline-block';
-        st.innerText = "🔴 LIVE RECORDING ACTIVE (Mixed Audio + Dual Video running).";
+        st.innerText = "🔴 LIVE RECORDING ACTIVE (Background safe loop running).";
     });
 
     sBtn.addEventListener('click', () => {
