@@ -62,7 +62,7 @@
             const vDev = dev.filter(d => d.kind === 'videoinput');
             const aDev = dev.filter(d => d.kind === 'audioinput');
 
-            bSel1.innerHTML = ''; aSel1.innerHTML = ''; aSel2.innerHTML = '';
+            bSe1.innerHTML = ''; aSel1.innerHTML = ''; aSel2.innerHTML = '';
 
             vDev.forEach((d, i) => {
                 let o = document.createElement('option'); o.value = d.deviceId; o.text = d.label || "Webcam " + (i+1); oSel.appendChild(o);
