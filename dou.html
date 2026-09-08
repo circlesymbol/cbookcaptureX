@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chromebook Studio</title>
+    <title>Chromebook Dual-Audio Studio</title>
     <style>
         body { background: #121212; color: #fff; font-family: sans-serif; padding: 20px; text-align: center; }
         .box { max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
@@ -15,13 +15,14 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Unified Recorder</h2>
+    <h2>Chromebook Dual-Audio Recorder</h2>
     <button id="pBtn">Click to Unlock Hardware</button>
     <div id="controls" style="display:none;">
-        <p>Capture Card: <select id="bSel"></select></p>
-        <p>Webcam: <select id="oSel"></select></p>
-        <p>Microphone: <select id="aSel"></select></p>
-        <button id="vBtn">Load Layout</button>
+        <p>Capture Card Video: <select id="bSel"></select></p>
+        <p>Webcam Video: <select id="oSel"></select></p>
+        <p>Capture Card Audio: <select id="aSel1"></select></p>
+        <p>Your Voice Microphone: <select id="aSel2"></select></p>
+        <button id="vBtn">Load Layout & Mix Audio</button>
         <button id="rBtn" style="display:none; background:#ff2e63;">Start Recording</button>
         <button id="sBtn" style="display:none; background:#555;">Stop & Save</button>
     </div>
@@ -36,7 +37,8 @@
     const sBtn = document.getElementById('sBtn');
     const bSel = document.getElementById('bSel');
     const oSel = document.getElementById('oSel');
-    const aSel = document.getElementById('aSel');
+    const aSel1 = document.getElementById('aSel1');
+    const aSel2 = document.getElementById('aSel2');
     const cv = document.getElementById('cv');
     const ctx = cv.getContext('2d');
     const st = document.getElementById('st');
@@ -49,15 +51,14 @@
     bVid.muted = true; bVid.autoplay = true; bVid.playsInline = true;
     oVid.muted = true; oVid.autoplay = true; oVid.playsInline = true;
 
-    let bStr, oStr, aStr, mStr, recorder;
+    let bStr, oStr, aStr1, aStr2, mStr, recorder, audioCtx, audioDestination;
     let chunks = [];
     let loopId;
 
     pBtn.addEventListener('click', async () => {
         try {
-            st.innerText = "Requesting mic permission...";
+            st.innerText = "Unlocking system devices...";
             const aInit = await navigator.mediaDevices.getUserMedia({ audio: true });
-            st.innerText = "Requesting cam permission...";
             const vInit = await navigator.mediaDevices.getUserMedia({ video: true });
             
             aInit.getTracks().forEach(t => t.stop());
@@ -67,7 +68,7 @@
             const vDev = dev.filter(d => d.kind === 'videoinput');
             const aDev = dev.filter(d => d.kind === 'audioinput');
 
-            bSel.innerHTML = ''; oSel.innerHTML = ''; aSel.innerHTML = '';
+            bSel.innerHTML = ''; oSel.innerHTML = ''; aSel1.innerHTML = ''; aSel2.innerHTML = '';
 
             vDev.forEach((d, i) => {
                 let o1 = document.createElement('option'); o1.value = d.deviceId; o1.text = d.label || "Camera " + (i+1); bSel.appendChild(o1);
@@ -76,12 +77,14 @@
             if(vDev.length > 1) oSel.selectedIndex = 1;
 
             aDev.forEach((d, i) => {
-                let o = document.createElement('option'); o.value = d.deviceId; o.text = d.label || "Mic " + (i+1); aSel.appendChild(o);
+                let o1 = document.createElement('option'); o1.value = d.deviceId; o1.text = d.label || "Audio Source " + (i+1); aSel1.appendChild(o1);
+                let o2 = document.createElement('option'); o2.value = d.deviceId; o2.text = d.label || "Audio Source " + (i+1); aSel2.appendChild(o2);
             });
+            if(aDev.length > 1) aSel2.selectedIndex = 1;
 
             document.getElementById('controls').style.display = 'block';
             pBtn.style.display = 'none';
-            st.innerText = "Permissions cleared. Pick inputs and load layout.";
+            st.innerText = "Hardware matched. Specify your audio lines and load layout.";
         } catch (e) {
             st.innerText = "Lockout Error: Secure context required (HTTPS).";
         }
@@ -89,21 +92,42 @@
 
     vBtn.addEventListener('click', async () => {
         try {
-            st.innerText = "Binding tracks...";
+            st.innerText = "Stitching media components...";
             if(loopId) cancelAnimationFrame(loopId);
 
-            aStr = await navigator.mediaDevices.getUserMedia({
-                audio: { deviceId: { exact: aSel.value }, echoCancellation: false, noiseSuppression: false }
+            // Pull Audio 1 (Capture Card Audio) - No auto-filters to save crispness
+            aStr1 = await navigator.mediaDevices.getUserMedia({
+                audio: { deviceId: { exact: aSel1.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
+
+            // Pull Audio 2 (Your voice Microphone)
+            aStr2 = await navigator.mediaDevices.getUserMedia({
+                audio: { deviceId: { exact: aSel2.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+            });
+
+            // Pull Video 1 (Capture Card video input)
             bStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: bSel.value }, width: 1280, height: 720 }
             });
             bVid.srcObject = bStr; await bVid.play();
 
+            // Pull Video 2 (Webcam video input)
             oStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: oSel.value }, width: 640, height: 480 }
             });
             oVid.srcObject = oStr; await oVid.play();
+
+            // VIRTUAL AUDIO MIXING ENGINE BOX
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioDestination = audioCtx.createMediaStreamDestination();
+
+            // Map streams into web mixing nodes
+            const source1 = audioCtx.createMediaStreamSource(aStr1);
+            const source2 = audioCtx.createMediaStreamSource(aStr2);
+
+            // Connect both lines into the single master output track
+            source1.connect(audioDestination);
+            source2.connect(audioDestination);
 
             function draw() {
                 ctx.fillStyle = '#000'; ctx.fillRect(0,0,1280,720);
@@ -115,9 +139,9 @@
 
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
-            st.innerText = "Feeds linked cleanly.";
+            st.innerText = "Video canvas rendered & Audio channels mixed perfectly.";
         } catch (e) {
-            st.innerText = "Stream bind failed.";
+            st.innerText = "Stream hardware mapping failed.";
         }
     });
 
@@ -125,8 +149,12 @@
         chunks = [];
         const cStr = cv.captureStream(30);
         mStr = new MediaStream();
+        
+        // Push the unified video layout frame track
         cStr.getVideoTracks().forEach(t => mStr.addTrack(t));
-        aStr.getAudioTracks().forEach(t => mStr.addTrack(t));
+        
+        // Push the mixed master audio track from the virtual mixing box
+        audioDestination.stream.getAudioTracks().forEach(t => mStr.addTrack(t));
 
         let opt = { mimeType: 'video/webm;codecs=vp8,opus' };
         if (!MediaRecorder.isTypeSupported(opt.mimeType)) opt = { mimeType: 'video/webm' };
@@ -138,19 +166,20 @@
             const blob = new Blob(chunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = "reaction.webm";
+            a.href = url; a.download = "reaction_studio.webm";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(url); st.innerText = "Saved to Downloads.";
+            URL.revokeObjectURL(url); st.innerText = "Completed file compiled directly to Downloads.";
         };
 
         recorder.start(1000);
         rBtn.style.display = 'none';
         sBtn.style.display = 'inline-block';
-        st.innerText = "RECORDING NOW (No constraints active).";
+        st.innerText = "🔴 LIVE RECORDING ACTIVE (Mixed Audio + Dual Video running).";
     });
 
     sBtn.addEventListener('click', () => {
         recorder.stop();
+        if (audioCtx) audioCtx.close();
         sBtn.style.display = 'none';
         rBtn.style.display = 'inline-block';
     });
