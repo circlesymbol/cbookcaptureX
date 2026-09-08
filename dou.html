@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chromebook GPU Studio Pro</title>
+    <title>Chromebook Unfiltered Studio</title>
     <style>
         body { background: #121212; color: #fff; font-family: sans-serif; padding: 20px; text-align: center; }
         .box { max-width: 800px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
@@ -15,13 +15,14 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Zero-Load GPU Studio (Audio Awake Build)</h2>
-    <button id="pBtn">1. Grant Webcam & Microphone Access</button>
+    <h2>Chromebook Unfiltered Loop Studio</h2>
+    <button id="pBtn">1. Unlock System Hardware</button>
     <div id="controls" style="display:none;">
         <p>Webcam Overlay: <select id="oSel"></select></p>
-        <p>Your Voice Microphone: <select id="aSel"></select></p>
-        <button id="vBtn">2. Initialize Hardware Screen Feed</button>
-        <button id="rBtn" style="display:none; background:#ff2e63;">3. Start Crystal-Clear Recording</button>
+        <p>System Loop Audio Source: <select id="aSel1"></select></p>
+        <p>Your Voice Microphone: <select id="aSel2"></select></p>
+        <button id="vBtn">2. Link Screen Layout</button>
+        <button id="rBtn" style="display:none; background:#ff2e63;">3. Start Crisp Recording</button>
         <button id="sBtn" style="display:none; background:#555;">Stop & Save</button>
     </div>
     <div id="st" style="margin:10px; color:#888;">Awaiting launch...</div>
@@ -34,45 +35,49 @@
     const rBtn = document.getElementById('rBtn');
     const sBtn = document.getElementById('sBtn');
     const oSel = document.getElementById('oSel');
-    const aSel = document.getElementById('aSel');
+    const aSel1 = document.getElementById('aSel1');
+    const aSel2 = document.getElementById('aSel2');
     const cv = document.getElementById('cv');
     const ctx = cv.getContext('2d');
     const st = document.getElementById('st');
 
-    cv.width = 1280;
-    cv.height = 720;
+    cv.width = 1280; cv.height = 720;
 
     let bVid = document.createElement('video');
     let oVid = document.createElement('video');
     bVid.muted = true; bVid.autoplay = true; bVid.playsInline = true;
     oVid.muted = true; oVid.autoplay = true; oVid.playsInline = true;
 
-    let bStr, oStr, aStr, mStr, recorder, worker, audioCtx, boostedTabAudioStream;
+    let bStr, oStr, aStr1, aStr2, mStr, recorder, worker;
     let chunks = [];
 
     pBtn.addEventListener('click', async () => {
         try {
-            st.innerText = "Initializing audio/video buses...";
+            st.innerText = "Scanning audio buses...";
+            // Open baseline channels to read labels
             const aInit = await navigator.mediaDevices.getUserMedia({ audio: true });
             const vInit = await navigator.mediaDevices.getUserMedia({ video: true });
-            aInit.getTracks().forEach(t => t.stop());
-            vInit.getTracks().forEach(t => t.stop());
+            aInit.getTracks().forEach(t => t.stop()); vInit.getTracks().forEach(t => t.stop());
 
             const dev = await navigator.mediaDevices.enumerateDevices();
             const vDev = dev.filter(d => d.kind === 'videoinput');
             const aDev = dev.filter(d => d.kind === 'audioinput');
 
-            oSel.innerHTML = ''; aSel.innerHTML = '';
+            oSel.innerHTML = ''; aSel1.innerHTML = ''; aSel2.innerHTML = '';
+
             vDev.forEach((d, i) => {
                 let o = document.createElement('option'); o.value = d.deviceId; o.text = d.label || "Webcam " + (i+1); oSel.appendChild(o);
             });
+
             aDev.forEach((d, i) => {
-                let o = document.createElement('option'); o.value = d.deviceId; o.text = d.label || "Microphone " + (i+1); aSel.appendChild(o);
+                let o1 = document.createElement('option'); o1.value = d.deviceId; o1.text = d.label || "Audio Input Line " + (i+1); aSel1.appendChild(o1);
+                let o2 = document.createElement('option'); o2.value = d.deviceId; o2.text = d.label || "Audio Input Line " + (i+1); aSel2.appendChild(o2);
             });
+            if(aDev.length > 1) aSel2.selectedIndex = 1;
 
             document.getElementById('controls').style.display = 'block';
             pBtn.style.display = 'none';
-            st.innerText = "Webcam and audio verified. Click Initialize Hardware Screen Feed.";
+            st.innerText = "Hardware found. Choose your tracks and link layout.";
         } catch (e) {
             st.innerText = "Secure connection required (HTTPS).";
         }
@@ -80,13 +85,26 @@
 
     vBtn.addEventListener('click', async () => {
         try {
-            st.innerText = "Configuring unthrottled hardware buffers...";
+            st.innerText = "Injecting unfiltered media constraints...";
             if(worker) worker.terminate();
 
-            // Open microphone channel with explicit hardware parameter overrides
-            aStr = await navigator.mediaDevices.getUserMedia({
+            // SCRIPT IMPLEMENTATION: Applying your exact filter-kill constraints
+            // inside getUserMedia to force Chrome to accept raw, uncompressed bytes!
+            
+            // Channel 1: The System/YouTube Audio Loop Input
+            aStr1 = await navigator.mediaDevices.getUserMedia({
                 audio: { 
-                    deviceId: { exact: aSel.value }, 
+                    deviceId: { exact: aSel1.value }, 
+                    echoCancellation: false, 
+                    noiseSuppression: false, 
+                    autoGainControl: false 
+                }
+            });
+
+            // Channel 2: Your Voice Microphone Input
+            aStr2 = await navigator.mediaDevices.getUserMedia({
+                audio: { 
+                    deviceId: { exact: aSel2.value }, 
                     echoCancellation: false, 
                     noiseSuppression: false, 
                     autoGainControl: false 
@@ -95,41 +113,16 @@
 
             // Open webcam feed cleanly
             oStr = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: oSel.value }, width: { ideal: 640 }, height: { ideal: 480 } }
+                video: { deviceId: { exact: oSel.value }, width: 640, height: 480 }
             });
             oVid.srcObject = oStr; await oVid.play();
 
-            // Load screen capture interface
+            // Grab the video track ONLY from getDisplayMedia, discarding the broken audio track entirely
             bStr = await navigator.mediaDevices.getDisplayMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-                audio: {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false
-                }
+                video: { width: 1280, height: 720, frameRate: 30 },
+                audio: false
             });
             bVid.srcObject = bStr; await bVid.play();
-
-            // AUDIO ENGINE WAKE-UP FIX:
-            // We initialize the context and immediately force it to resume() on the click event thread.
-            // This prevents the browser from putting the stream to sleep and cutting off your sound completely!
-            if (bStr && bStr.getAudioTracks().length > 0) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') {
-                    await audioCtx.resume();
-                }
-                
-                const tabAudioSource = audioCtx.createMediaStreamSource(bStr);
-                const audioDestination = audioCtx.createMediaStreamDestination();
-                
-                const tabGainNode = audioCtx.createGain();
-                tabGainNode.gain.value = 3.5; // Controls the master audio volume multiplier
-                
-                tabAudioSource.connect(tabGainNode);
-                tabGainNode.connect(audioDestination);
-                
-                boostedTabAudioStream = audioDestination.stream;
-            }
 
             const workerCode = `
                 let timer = null;
@@ -155,40 +148,24 @@
 
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
-            st.innerText = "Hardware layers locked. Make sure 'Share tab audio' was checked!";
+            st.innerText = "Bypass active. Ready to capture.";
         } catch (e) {
-            st.innerText = "Hardware setup cancelled or rejected.";
+            st.innerText = "Setup error. Verify your input devices.";
         }
     });
 
-    rBtn.addEventListener('click', async () => {
-        if (audioCtx && audioCtx.state === 'suspended') {
-            await audioCtx.resume();
-        }
-
+    rBtn.addEventListener('click', () => {
         chunks = [];
         const cStr = cv.captureStream(30);
         mStr = new MediaStream();
-        
         cStr.getVideoTracks().forEach(t => mStr.addTrack(t));
         
-        // Push raw microphone audio track cleanly
-        aStr.getAudioTracks().forEach(t => mStr.addTrack(t));
-        
-        // Push the boosted, unsuppressed tab audio track directly into the file stream container
-        if (boostedTabAudioStream && boostedTabAudioStream.getAudioTracks().length > 0) {
-            boostedTabAudioStream.getAudioTracks().forEach(t => mStr.addTrack(t));
-        } else if (bStr && bStr.getAudioTracks().length > 0) {
-            bStr.getAudioTracks().forEach(t => mStr.addTrack(t));
-        }
+        // Write the two independent, unsuppressed getUserMedia audio lines straight to the container
+        aStr1.getAudioTracks().forEach(t => mStr.addTrack(t));
+        aStr2.getAudioTracks().forEach(t => mStr.addTrack(t));
 
-        let opt = { 
-            mimeType: 'video/webm;codecs=vp8,opus',
-            videoBitsPerSecond: 2600000 
-        };
-        if (!MediaRecorder.isTypeSupported(opt.mimeType)) {
-            opt = { mimeType: 'video/webm', videoBitsPerSecond: 2600000 };
-        }
+        let opt = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 2600000 };
+        if (!MediaRecorder.isTypeSupported(opt.mimeType)) opt = { mimeType: 'video/webm', videoBitsPerSecond: 2600000 };
 
         recorder = new MediaRecorder(mStr, opt);
         recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
@@ -197,7 +174,7 @@
             const blob = new Blob(chunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = "unsuppressed_boosted_reaction.webm";
+            a.href = url; a.download = "unfiltered_hd_reaction.webm";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url); st.innerText = "Completed HD file saved directly to Downloads.";
         };
@@ -205,14 +182,12 @@
         recorder.start(1000);
         rBtn.style.display = 'none';
         sBtn.style.display = 'inline-block';
-        st.innerText = "🔴 RECORDING LIVE (Tab Audio Filters Disabled + Volume Boosted).";
+        st.innerText = "🔴 RECORDING LIVE (WebRTC Suppression Defeated).";
     });
 
     sBtn.addEventListener('click', () => {
         recorder.stop();
         if(worker) worker.postMessage('stop');
-        if (audioCtx) audioCtx.close();
-        st.innerText = "Compiling crisp output track...";
         sBtn.style.display = 'none';
         rBtn.style.display = 'inline-block';
     });
