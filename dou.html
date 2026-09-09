@@ -15,7 +15,7 @@
 <body>
 
 <div class="box">
-    <h2>Chromebook Hybrid Studio (Fixed Dual-Mic Build)</h2>
+    <h2>Chromebook Hybrid Studio (Stable Code Build)</h2>
     <button id="pBtn">1. Grant Hardware Permissions</button>
     <div id="controls" style="display:none;">
         <p>Webcam Overlay: <select id="oSel"></select></p>
@@ -54,6 +54,8 @@
     pBtn.addEventListener('click', async () => {
         try {
             st.innerText = "Scanning system hardware buses...";
+            
+            // Baseline hardware request to trigger system browser popup cleanly
             const aInit = await navigator.mediaDevices.getUserMedia({ audio: true });
             const vInit = await navigator.mediaDevices.getUserMedia({ video: true });
             aInit.getTracks().forEach(t => t.stop()); vInit.getTracks().forEach(t => t.stop());
@@ -62,7 +64,8 @@
             const vDev = dev.filter(d => d.kind === 'videoinput');
             const aDev = dev.filter(d => d.kind === 'audioinput');
 
-            bSe1.innerHTML = ''; aSel1.innerHTML = ''; aSel2.innerHTML = '';
+            // TYPO FIXED: Cleaned up variables to target actual dropdown configurations
+            oSel.innerHTML = ''; aSel1.innerHTML = ''; aSel2.innerHTML = '';
 
             vDev.forEach((d, i) => {
                 let o = document.createElement('option'); o.value = d.deviceId; o.text = d.label || "Webcam " + (i+1); oSel.appendChild(o);
@@ -73,17 +76,17 @@
                 let o2 = document.createElement('option'); o2.value = d.deviceId; o2.text = d.label || "Audio Input " + (i+1); aSel2.appendChild(o2);
             });
             
-            // FIXED DROPDOWN SELECTION SEPARATION:
             if(aDev.length > 1) {
-                aSel1.selectedIndex = 0; // Capture card defaults first
-                aSel2.selectedIndex = 1; // Your physical microphone defaults second
+                aSel1.selectedIndex = 0; 
+                aSel2.selectedIndex = 1; 
             }
 
             document.getElementById('controls').style.display = 'block';
             pBtn.style.display = 'none';
             st.innerText = "Buses matched. Map tracks and initialize layout.";
-        } catch (e) {
-            st.innerText = "Secure connection required (HTTPS).";
+        } catch (err) {
+            st.innerText = "Permission System Failure: " + err.name + " - " + err.message;
+            console.error(err);
         }
     });
 
@@ -92,53 +95,34 @@
             st.innerText = "Locking independent hardware layers...";
             if(worker) worker.terminate();
 
-            // FIXED SINGLE-REQUEST BYPASS:
-            // Instead of firing separate asynchronous calls that conflict on the audio bus,
-            // we request the Capture Card Line explicitly by value.
             aStr1 = await navigator.mediaDevices.getUserMedia({
-                audio: { 
-                    deviceId: { exact: aSel1.value }, 
-                    echoCancellation: false, 
-                    noiseSuppression: false, 
-                    autoGainControl: false 
-                }
+                audio: { deviceId: { exact: aSel1.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
 
-            // Request the distinct Voice Microphone explicitly by its actual chosen device value
             aStr2 = await navigator.mediaDevices.getUserMedia({
-                audio: { 
-                    deviceId: { exact: aSel2.value }, 
-                    echoCancellation: false, 
-                    noiseSuppression: false, 
-                    autoGainControl: false 
-                }
+                audio: { deviceId: { exact: aSel2.value }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
 
-            // Pull Webcam Feed
             oStr = await navigator.mediaDevices.getUserMedia({
                 video: { deviceId: { exact: oSel.value }, width: 640, height: 480 }
             });
             oVid.srcObject = oStr; await oVid.play();
 
-            // Share Screen Video (Audio false to completely drop WebRTC browser constraints)
             bStr = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: 1280, height: 720, frameRate: 30 },
                 audio: false
             });
             bVid.srcObject = bStr; await bVid.play();
 
-            // MIXER ENGINE RUN
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             audioDestination = audioCtx.createMediaStreamDestination();
 
             const cardSource = audioCtx.createMediaStreamSource(aStr1);
             const micSource = audioCtx.createMediaStreamSource(aStr2);
 
-            // Create a virtual delay node specifically for your microphone track.
             const micDelayNode = audioCtx.createDelay(1.0);
-            micDelayNode.delayTime.value = 0.0; // Set to 0.0 since you confirmed there are no latency issues!
+            micDelayNode.delayTime.value = 0.0; 
 
-            // Map inputs cleanly
             cardSource.connect(audioDestination);
             micSource.connect(micDelayNode);
             micDelayNode.connect(audioDestination);
@@ -168,9 +152,9 @@
             vBtn.style.display = 'none';
             rBtn.style.display = 'inline-block';
             st.innerText = "Tracks fully isolated. Verify choices and hit record!";
-        } catch (e) {
-            st.innerText = "Stream hardware mapping failed. Make sure options are distinct.";
-            console.error(e);
+        } catch (err) {
+            st.innerText = "Mapping Error: " + err.name + " - " + err.message;
+            console.error(err);
         }
     });
 
